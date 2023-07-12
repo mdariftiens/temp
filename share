@@ -1,4 +1,3 @@
-in app/Repository/Eloquent/BankProgramRepo.php fn getAnchorPrograms add before get()
-
-->groupBy('bands.id', 'bands.uuid', 'bands.name', 'funding_limits.buyer_limit', 'funding_limits.buyer_current_exposure', 'funding_limits.buyer_pipeline_request', 'funding_limits.expiry_date')
-
+ALTER TABLE oustanding_data_to_hadoop MODIFY n_account_tenor NUMBER
+ALTER TABLE oustanding_data_to_hadoop MODIFY tenor NUMBER
+ALTER TABLE oustanding_data_to_hadoop MODIFY v_repayment_type VARCHAR2(100)
