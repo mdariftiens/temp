@@ -1,3 +1,1 @@
-ALTER TABLE oustanding_data_to_hadoop MODIFY n_account_tenor NUMBER
-ALTER TABLE oustanding_data_to_hadoop MODIFY tenor NUMBER
-ALTER TABLE oustanding_data_to_hadoop MODIFY v_repayment_type VARCHAR2(100)
+
