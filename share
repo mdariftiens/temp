@@ -1,1 +1,19 @@
+CREATE OR REPLACE TRIGGER table_ddl_trigger
+AFTER CREATE OR ALTER OR DROP ON SCHEMA
+DECLARE
+   v_event_type VARCHAR2(50);
+   v_object_name VARCHAR2(128);
+   old_column_name VARCHAR2(128);
+   new_column_name VARCHAR2(128);
+BEGIN
+   v_event_type := ora_sysevent;
+   v_object_name := ora_dict_obj_name;
 
+      DBMS_OUTPUT.PUT_LINE('Event ' || v_event_type);
+
+   INSERT INTO ddl_log (object_owner, object_name, column_name, SYS_EVENT_INFO, ddl_timestamp)
+            VALUES (ora_dict_obj_owner , ora_dict_obj_name, 'colname', ora_sysevent, SYSTIMESTAMP);
+
+
+
+END;
