@@ -1,10 +1,14 @@
-create table DDL_LOG
-(
-    LOG_ID         NUMBER,
-    OBJECT_OWNER   VARCHAR2(100),
-    OBJECT_NAME    VARCHAR2(100),
-    COLUMN_NAME    VARCHAR2(100),
-    DDL_TIMESTAMP  TIMESTAMP(6),
-    SYS_EVENT_INFO VARCHAR2(1000),
-    IS_DROPPED     VARCHAR2(10)
-)
+D:\laragon\www\githubprojects\scf-indianbank\app\Repository\Eloquent\InvoiceRepo.php
+ public function getData()
+ public function getInvoicesForDf()
+
+ if($this->financesearchArray){
+
+            if (in_array(trans('label.lbl_not_requested'),$this->financesearchArray)) {
+------------
+if(count($this->financesearchArray)==1){
+                    $query->whereNull('invoices.finance_status');
+                   }else{
+                   unset($this->financesearchArray[array_search('Not Requested', $this->financesearchArray)]);
+                    $query->whereIn('invoices.finance_status', $this->financesearchArray)->orWhereNull('invoices.finance_status');
+                   }
