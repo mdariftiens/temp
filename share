@@ -12,3 +12,51 @@ if (Input::get('financeStatus')) {
             }
             $this->invoiceRepo->financesearchArray = $financesearchArray;
         }
+=========================================
+
+<?php
+                              $finance_status = (int) $invoice->inv_finance_status;
+                              $finance_tt_status = trans('label.lbl_fin_not_requested');
+                              if($finance_status == 1) {
+                                  $finance_tt_status = trans('label.lbl_fin_submitted');
+                              } else if($finance_status == 2) {
+                                  $finance_tt_status = trans('label.lbl_fin_internal_reject');
+                              } else if($finance_status == 3) {
+                                  $finance_tt_status = trans('label.lbl_fin_submitted');
+                              } else if($finance_status == 4) {
+                                  $finance_tt_status = trans('label.lbl_fin_rejected');
+                              } else if($finance_status == 5) {
+                                  $finance_tt_status = trans('label.lbl_fin_approved');
+                              } else if($finance_status == 6) {
+                                  $finance_tt_status = trans('label.lbl_fin_rejected');
+                              } else if($finance_status == 7) {
+                                  $finance_tt_status = trans('label.lbl_fin_disbursed');
+                              } else if($finance_status == 8) {
+                                  $finance_tt_status = trans('label.lbl_fin_closed');
+                              }
+                            ?>
+
+                            <td class="text-left">
+                              @if($invoice->status != 5 && is_null($invoice->inv_finance_status))
+                                -
+                              @elseif($invoice->status == 5 && (is_null($invoice->inv_finance_status) || $invoice->inv_finance_status == 0))
+                                <i class="fa fa-thumbs-up fa-xs round_btn yellow_bg_ntf wight_ntf"></i>
+                                <div title="{{ $finance_tt_status}}">{{trans('label.lbl_not_requested')}}</div>
+                              @else
+
+                                @if (in_array($finance_status, [2,4,6]))
+                                <i class="{{$statusData['symbols'][$statusData['status'][4]]}}"></i>
+                                  <?php
+                                    $reasons = isset($invoice->inv_finance_remarks)?json_decode($invoice->inv_finance_remarks,true):[];
+                                    $concatReason = "";
+                                    foreach($reasons as $reason) {
+                                      $concatReason .= "-> ".$reason['message'].'<br>';
+                                    }
+                                  ?>
+                                  <i class="fa fa-info-circle" title="" data-html="true" data-original-title="{{ $concatReason }}"></i>
+                                @else
+                                  <i class="{{$statusData['symbols'][$statusData['status'][$finance_status]]}}"></i>
+                                @endif
+                                <div title="{{$finance_tt_status}}">{{$statusData['financeStatus'][$finance_status]}}</div>
+                              @endif
+                            </td>
