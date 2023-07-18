@@ -60,3 +60,9 @@ if (Input::get('financeStatus')) {
                                 <div title="{{$finance_tt_status}}">{{$statusData['financeStatus'][$finance_status]}}</div>
                               @endif
                             </td>
+===========================
+
+select * from SYS.V_$SQLAREA;
+select  s.username,SQL_FULLTEXT,sql_text
+from SYS.V_$SQLAREA q,  SYS.V_$SESSION s
+where s.sql_hash_value = q.hash_value
