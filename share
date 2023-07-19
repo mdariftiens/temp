@@ -1,126 +1,240 @@
-if (Input::get('financeStatus')) {
-            $financesearchArray = array();
-            $inputArray  = Input::get('financeStatus');
-            $statusArray = $this->variousStates['DISCOUNTING']['Seller'];
-            foreach ($statusArray as $key => $value) {
-                if (in_array($value, $inputArray)) {
-                    array_push($financesearchArray, $key);
-                }
+public function consolidateInterestPosting($date, $newLog, $isLoanWisePosting = false){
+
+           // DF posting query
+  // DB::raw( "cbc.id as credit_to_id,(CASE WHEN JSON_EXTRACT(
+  //                           b.configurations,
+  //                           '$.basic_configuration.separate_account_from_overdraft_branch_specific'
+  //                       ) THEN CONCAT(cb.account_no, br.code) ELSE cb.account_no
+  //                   END
+  //               ) AS debit_from,
+        if(isOracle()){
+            if(!empty($this->account)){
+                $filter_by = 'or od_accounts.account_number = '.$this->account;
+            }else{
+                $filter_by = '';
             }
-            if (in_array(trans('label.lbl_not_requested'),Input::get('financeStatus'))) {
-                array_push($financesearchArray, trans('label.lbl_not_requested'));
+
+            $particulars = long_listagg('to_char(od_transactions.particulars)','particulars');
+            $invoice_numbers = long_listagg('od_transactions.invoice_number','invoice_numbers');
+            $odt_ids = long_listagg('NVL (od_transactions.id, NULL)','odt_ids');
+            $odt_currency = long_listagg('NVL (od_transactions.currency, NULL)','odt_currency');
+            $loan_ids = long_listagg('NVL (od_transactions.invoice_id, NULL)','loan_ids');
+            $applied_base_rates = long_listagg('NVL (od_transactions.applied_base_rate, NULL)','applied_base_rates');
+            $seasonal_limit_ids = long_listagg('NVL (od_transactions.seasonal_limit_id, NULL)','seasonal_limit_ids');
+            $interest_balance_details = long_listagg('NVL (od_transactions.interest_balance, NULL)','interest_balance_details');
+            $penal_interest_details = long_listagg('NVL (od_transactions.penal_interest, NULL)','penal_interest_details');
+            $invoice_ids = long_listagg('NVL (od_transactions.invoice_id, NULL)','invoice_ids');
+            $discountingids = long_listagg('NVL (od_transactions.discounting_id, NULL)','discountingids');
+            $payment_request_ids = long_listagg('NVL (od_transactions.payment_request_id, NULL)','payment_request_ids');
+
+            $sql = DB::raw("
+            SELECT  max(od_transactions.od_account_id)
+                       AS id,
+                   $odt_ids,
+                   SUM (od_transactions.interest_balance)
+                       AS interest_balance_sum,
+                   SUM (od_transactions.penal_interest)
+                       AS penal_interest_sum,
+                   (  SUM (od_transactions.interest_balance)
+                    + SUM (od_transactions.penal_interest))
+                       AS int_sum,
+                   $odt_currency,
+                   $loan_ids,
+                   $applied_base_rates,
+                   $seasonal_limit_ids,
+                   $particulars,
+                   $interest_balance_details,
+                   $penal_interest_details,
+                   $invoice_numbers,
+                   $invoice_ids,
+                   $discountingids,
+                   MAX(cd.name)
+                       AS distributor_name,
+                   MAX(cd.is_npa)
+                       AS is_npa,
+                   MAX(b.id)
+                       AS bank_id,
+                   MAX(cd.identification_no)
+                       AS buyer_identification_no,
+                   MAX(od_accounts.distributor_id)
+                       AS distributor_id,
+                   MAX(br.code)
+                       AS branch_code,
+                   MAX(to_char(b.configurations))
+                       AS bank_configurations,
+                   $payment_request_ids,
+                    (CASE
+                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') IS NOT NULL
+                    THEN
+                    CAST (JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') As DECIMAL (4, 2))
+                    ELSE 0
+                    END)
+                    min_amount,
+                   max(cbc.id) AS credit_to_id,
+                    max(od_accounts.account_number) AS debit_from,
+                    (CASE
+                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_interest_account_branch_specific') = 1
+                    THEN br.code ||'~'||cbc.account_no
+                    ELSE cbc.account_no
+                    END)
+                    credit_to,
+                   max(cbp.id) AS credit_penal_to_id,
+                    (CASE
+                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_penal_interest_account_branch_specific') = 1
+                    THEN br.code ||'~'||cbp.account_no
+                    ELSE cbp.account_no
+                    END)
+                    credit_penal_to,
+                    max(od_accounts.available_limit) as available_limit
+              FROM OD_TRANSACTIONS
+                   LEFT JOIN PAYMENT_REQUESTS
+                       ON OD_TRANSACTIONS.PAYMENT_REQUEST_ID =
+                          PAYMENT_REQUESTS.ID
+                   LEFT JOIN OD_ACCOUNTS
+                       ON PAYMENT_REQUESTS.OD_ACCOUNT_ID = OD_ACCOUNTS.ID
+                   LEFT JOIN BANKS b ON B.ID = OD_ACCOUNTS.BANK_ID
+                   LEFT JOIN COMPANY_BANKS cb ON CB.ID = JSON_VALUE ( b . configurations,
+                   '$.basic_configuration.separate_interest_receivable_account_from_overdraft')
+                   left join COMPANY_BANKS cbc on CBC.ID     =
+            JSON_VALUE         (b.configurations,  '$.basic_configuration.dis_interest_account')
+            left join COMPANY_BANKS cbp on CBP.ID =
+            JSON_VALUE(b.configurations,'$.basic_configuration.dis_penal_interest_recievable_account')
+            left join DISCOUNTINGS on PAYMENT_REQUESTS.PI_ID = DISCOUNTINGS.PI_ID and DISCOUNTINGS.STATUS = 7
+            left join PAYMENT_INSTRUCTIONS on DISCOUNTINGS.PI_ID = PAYMENT_INSTRUCTIONS.ID
+            left join COMPANIES ca on OD_ACCOUNTS.ANCHOR_ID = CA.ID
+            left join COMPANIES cd on OD_ACCOUNTS.DISTRIBUTOR_ID = CD.ID
+            left join BRANCHES br on CD.BRANCH_ID = BR.ID
+            where(INTEREST_BALANCE >  0  or PENAL_INTEREST >  0 )"
+                .$filter_by.
+                "and OD_TRANSACTIONS.IS_OVERDUE not in (1,2)
+            group by  od_transactions.od_account_id,
+                    CASE
+                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') IS NOT NULL
+                    THEN
+                    CAST (JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') As DECIMAL (4, 2))
+                    ELSE 0
+                    END,
+                    CASE
+                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_interest_account_branch_specific') = 1
+                    THEN br.code ||'~'||cbc.account_no
+                    ELSE cbc.account_no
+                    END,
+                    CASE
+                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_penal_interest_account_branch_specific') = 1
+                    THEN br.code ||'~'||cbp.account_no
+                    ELSE cbp.account_no
+                    END
+                    ");
+
+            $od_transactions_by_od =DB::select($sql);
+
+        }else{
+
+            $od_transactions_by_od =OdTransaction::select(DB::raw("od_transactions.od_account_id as id,
+            group_concat(IFNULL(od_transactions.id,'NULL')) as odt_ids,
+            sum(od_transactions.interest_balance) as interest_balance_sum,
+            sum(od_transactions.penal_interest) as penal_interest_sum,
+            (sum(od_transactions.interest_balance)+sum(od_transactions.penal_interest)) as int_sum,
+            group_concat(IFNULL(od_transactions.currency,'NULL')) as odt_currency,
+            group_concat(IFNULL(od_transactions.invoice_id,'NULL')) as loan_ids,
+            group_concat(IFNULL(od_transactions.applied_base_rate,'NULL')) as applied_base_rates,
+            group_concat(IFNULL(od_transactions.seasonal_limit_id,'NULL')) as seasonal_limit_ids,
+            group_concat(IFNULL(od_transactions.particulars,'NULL')) as particulars,
+            group_concat(IFNULL(od_transactions.interest_balance,'NULL')) as interest_balance_details,
+            group_concat(IFNULL(od_transactions.penal_interest,'NULL')) as penal_interest_details,
+            group_concat(IFNULL(od_transactions.invoice_number,'NULL')) as invoice_numbers,
+            group_concat(IFNULL(od_transactions.invoice_id,'NULL')) as invoice_ids,
+            group_concat(IFNULL(od_transactions.discounting_id,'NULL')) as discountingids,
+            cd.name as distributor_name,
+            cd.is_npa,
+            b.id as bank_id,
+            cd.identification_no as buyer_identification_no,
+            od_accounts.distributor_id,od_accounts.available_limit,br.code as branch_code,b.configurations as bank_configurations,
+            od_accounts.bank_id,
+            group_concat(IFNULL(od_transactions.payment_request_id,'NULL')) AS payment_request_ids"),DB::raw("( CASE WHEN (JSON_EXTRACT( b.configurations, '$.basic_configuration.round_off_repayments' ) IS NOT NULL or JSON_EXTRACT( b.configurations, '$.basic_configuration.round_off_repayments' ) != '') THEN CAST(JSON_EXTRACT(b.configurations, '$.basic_configuration.round_off_repayments') AS DECIMAL(4,2)) ELSE 0 END ) AS min_amount"),
+            DB::raw( "cbc.id as credit_to_id,od_accounts.account_number AS debit_from,
+
+                    (CASE WHEN JSON_EXTRACT(
+                        b.configurations,
+                        '$.basic_configuration.dis_interest_account_branch_specific'
+                    ) THEN CONCAT(br.code,'~',cbc.account_no) ELSE cbc.account_no
+                END
+                ) AS credit_to,
+
+                cbp.id as credit_penal_to_id, (CASE WHEN JSON_EXTRACT(
+                        b.configurations,
+                        '$.basic_configuration.dis_penal_interest_recievable_account_branch_specific'
+                    ) THEN CONCAT(br.code,'~',cbp.account_no) ELSE cbp.account_no
+                END
+                ) AS credit_penal_to"
+            ))
+
+            ->leftJoin('payment_requests', 'od_transactions.payment_request_id', '=', 'payment_requests.id')
+            ->leftJoin('od_accounts', 'payment_requests.od_account_id', '=', 'od_accounts.id')
+            ->leftJoin('banks as b', 'b.id', '=', 'od_accounts.bank_id')
+            ->leftJoin('company_banks as cb','cb.id',DB::Raw("JSON_UNQUOTE(JSON_EXTRACT(b.configurations,'$.basic_configuration.separate_interest_receivable_account_from_overdraft'))"))
+            ->leftJoin('company_banks as cbc','cbc.id',DB::Raw("JSON_UNQUOTE(JSON_EXTRACT(b.configurations,'$.basic_configuration.dis_interest_account'))"))
+            ->leftJoin('company_banks as cbp','cbp.id',DB::Raw("JSON_UNQUOTE(JSON_EXTRACT(b.configurations,'$.basic_configuration.dis_penal_interest_recievable_account'))"))
+
+            ->leftJoin('discountings', function($join) {
+            $join->on('payment_requests.pi_id', '=', 'discountings.pi_id');
+            $join->where('discountings.status', '=', 7);
+            })
+
+            ->leftJoin('payment_instructions', 'discountings.pi_id', '=', 'payment_instructions.id')
+            ->leftJoin('companies as ca', 'od_accounts.anchor_id', '=', 'ca.id')
+            ->leftJoin('companies as cd', 'od_accounts.distributor_id', '=', 'cd.id')
+            ->leftJoin('branches as br', 'cd.branch_id', '=', 'br.id')
+            ->where(function($q) {
+                $q->where('interest_balance', '>', 0)
+                ->orWhere('penal_interest', '>', 0);
+            });
+            if(!empty($this->account)){
+                $od_transactions_by_od = $od_transactions_by_od->where('od_accounts.account_number', $this->account);
             }
-            $this->invoiceRepo->financesearchArray = $financesearchArray;
+            $od_transactions_by_od = $od_transactions_by_od->whereNotIn('od_transactions.is_overdue',[1,2])
+            ->groupby('od_transactions.od_account_id')
+            ->get();
         }
-=========================================
 
-<?php
-                              $finance_status = (int) $invoice->inv_finance_status;
-                              $finance_tt_status = trans('label.lbl_fin_not_requested');
-                              if($finance_status == 1) {
-                                  $finance_tt_status = trans('label.lbl_fin_submitted');
-                              } else if($finance_status == 2) {
-                                  $finance_tt_status = trans('label.lbl_fin_internal_reject');
-                              } else if($finance_status == 3) {
-                                  $finance_tt_status = trans('label.lbl_fin_submitted');
-                              } else if($finance_status == 4) {
-                                  $finance_tt_status = trans('label.lbl_fin_rejected');
-                              } else if($finance_status == 5) {
-                                  $finance_tt_status = trans('label.lbl_fin_approved');
-                              } else if($finance_status == 6) {
-                                  $finance_tt_status = trans('label.lbl_fin_rejected');
-                              } else if($finance_status == 7) {
-                                  $finance_tt_status = trans('label.lbl_fin_disbursed');
-                              } else if($finance_status == 8) {
-                                  $finance_tt_status = trans('label.lbl_fin_closed');
-                              }
-                            ?>
-
-                            <td class="text-left">
-                              @if($invoice->status != 5 && is_null($invoice->inv_finance_status))
-                                -
-                              @elseif($invoice->status == 5 && (is_null($invoice->inv_finance_status) || $invoice->inv_finance_status == 0))
-                                <i class="fa fa-thumbs-up fa-xs round_btn yellow_bg_ntf wight_ntf"></i>
-                                <div title="{{ $finance_tt_status}}">{{trans('label.lbl_not_requested')}}</div>
-                              @else
-
-                                @if (in_array($finance_status, [2,4,6]))
-                                <i class="{{$statusData['symbols'][$statusData['status'][4]]}}"></i>
-                                  <?php
-                                    $reasons = isset($invoice->inv_finance_remarks)?json_decode($invoice->inv_finance_remarks,true):[];
-                                    $concatReason = "";
-                                    foreach($reasons as $reason) {
-                                      $concatReason .= "-> ".$reason['message'].'<br>';
-                                    }
-                                  ?>
-                                  <i class="fa fa-info-circle" title="" data-html="true" data-original-title="{{ $concatReason }}"></i>
-                                @else
-                                  <i class="{{$statusData['symbols'][$statusData['status'][$finance_status]]}}"></i>
-                                @endif
-                                <div title="{{$finance_tt_status}}">{{$statusData['financeStatus'][$finance_status]}}</div>
-                              @endif
-                            </td>
-===========================
-
-select * from SYS.V_$SQLAREA;
-select  s.username,SQL_FULLTEXT,sql_text
-from SYS.V_$SQLAREA q,  SYS.V_$SESSION s
-where s.sql_hash_value = q.hash_value
-=======================================
+           \Log::info("od_transactions_by_od::".json_encode($od_transactions_by_od));
 
 
-DROP TRIGGER OD_TRANSACTIONS_HIS_ON_INS;
+           $settingNpaIntPosting = !empty(env('NPA_INT_POSTING')) ? env('NPA_INT_POSTING') : false;
+           \Log::info('settingNpaIntPosting::'.json_encode($settingNpaIntPosting));
+            foreach($od_transactions_by_od as $k=>$odtod){
+                \Log::info('odtod::'.json_encode($odtod->is_npa));
+             $odtod->credit_to = getEncryptedGL($odtod->credit_to);
+              $odtod->credit_penal_to = getEncryptedGL($odtod->credit_penal_to);
 
-CREATE OR REPLACE TRIGGER od_transactions_his_on_ins 
-                AFTER INSERT
-                   ON OD_TRANSACTIONS
-                   FOR EACH ROW
-DECLARE
-                  
-                BEGIN
-                
-                INSERT INTO od_transactions_history
-                   ( discounting_id,int_reset_date,penal_reset_date,id,uuid,od_account_id,debit_from,credit_to,is_temp_od,created_by,dpd,cashback_balance,cashback_updated_date,particulars,"REMARK",tax_percent,fees_id,closing_balance,last_cron_accrual_date,seasonal_limit_id,consolidate_loans,applied_base_rate,last_cron_date,total_interest,total_penal_interest,total_monthly_interest,total_monthly_penal_interest,invoice_id,payment_request_id,"DATE",debit_entry,credit_entry,balance,interest_balance,priority,interest_indicator,is_bank_reco_tran,settlement_status,settlement_date_time,settlement_pr_id,created_at,updated_at,credit_type_id,invoice_number,currency,tran_order,penal_interest,is_overdue,overdue_date,credit_balance , history_updated_at, action_history )
-                   VALUES
-                   ( :new.discounting_id,:new.int_reset_date,:new.penal_reset_date,:new.id,:new.uuid,:new.od_account_id,:new.debit_from,:new.credit_to,:new.is_temp_od,:new.created_by,:new.dpd,:new.cashback_balance,:new.cashback_updated_date,:new.particulars,:new.remark,:new.tax_percent,:new.fees_id,:new.closing_balance,:new.last_cron_accrual_date,:new.seasonal_limit_id,:new.consolidate_loans,:new.applied_base_rate,:new.last_cron_date,:new.total_interest,:new.total_penal_interest,:new.total_monthly_interest,:new.total_monthly_penal_interest,:new.invoice_id,:new.payment_request_id,:new.date,:new.debit_entry,:new.credit_entry,:new.balance,:new.interest_balance,:new.priority,:new.interest_indicator,:new.is_bank_reco_tran,:new.settlement_status,:new.settlement_date_time,:new.settlement_pr_id,:new.created_at,:new.updated_at,:new.credit_type_id,:new.invoice_number,:new.currency,:new.tran_order,:new.penal_interest,:new.is_overdue,:new.overdue_date,:new.credit_balance  , CURRENT_TIMESTAMP, 'Inserted');                     
-                END;
+             //$odtod->invoice_numbers = decryptString($odtod->invoice_numbers,'~~');
+             // $odtod->invoice_numbers = $odtod->invoice_numbers);
 
-
-
-
-DROP TRIGGER OD_TRANSACTIONS_HIS_ON_UPDATE;
-
-CREATE OR REPLACE TRIGGER od_transactions_his_on_update 
-                AFTER UPDATE
-                   ON OD_TRANSACTIONS
-                   FOR EACH ROW
-DECLARE
-                  
-                BEGIN
-                
-                INSERT INTO od_transactions_history
-                   ( discounting_id,int_reset_date,penal_reset_date,id,uuid,od_account_id,debit_from,credit_to,is_temp_od,created_by,dpd,cashback_balance,cashback_updated_date,particulars,"REMARK",tax_percent,fees_id,closing_balance,last_cron_accrual_date,seasonal_limit_id,consolidate_loans,applied_base_rate,last_cron_date,total_interest,total_penal_interest,total_monthly_interest,total_monthly_penal_interest,invoice_id,payment_request_id,"DATE",debit_entry,credit_entry,balance,interest_balance,priority,interest_indicator,is_bank_reco_tran,settlement_status,settlement_date_time,settlement_pr_id,created_at,updated_at,credit_type_id,invoice_number,currency,tran_order,penal_interest,is_overdue,overdue_date,credit_balance , history_updated_at, action_history )
-                   VALUES
-                   ( :old.discounting_id,:old.int_reset_date,:old.penal_reset_date,:old.id,:old.uuid,:old.od_account_id,:old.debit_from,:old.credit_to,:old.is_temp_od,:old.created_by,:old.dpd,:old.cashback_balance,:old.cashback_updated_date,:old.particulars,:old.remark,:old.tax_percent,:old.fees_id,:old.closing_balance,:old.last_cron_accrual_date,:old.seasonal_limit_id,:old.consolidate_loans,:old.applied_base_rate,:old.last_cron_date,:old.total_interest,:old.total_penal_interest,:old.total_monthly_interest,:old.total_monthly_penal_interest,:old.invoice_id,:old.payment_request_id,:old.date,:old.debit_entry,:old.credit_entry,:old.balance,:old.interest_balance,:old.priority,:old.interest_indicator,:old.is_bank_reco_tran,:old.settlement_status,:old.settlement_date_time,:old.settlement_pr_id,:old.created_at,:old.updated_at,:old.credit_type_id,:old.invoice_number,:old.currency,:old.tran_order,:old.penal_interest,:old.is_overdue,:old.overdue_date,:old.credit_balance  , CURRENT_TIMESTAMP, 'Updated');
-                END;
-/
+             $odtod->check_type='posting';
+             if($odtod->is_npa != 1 || ($odtod->is_npa == 1 && $settingNpaIntPosting)){
+                \Log::info('npa;');
+                if((env('DF_PENAL_POSTING') != 'monthly' && $odtod->interest_balance_sum > 0) || env('DF_PENAL_POSTING') == 'monthly'){
+                    $newLog->total_records_posting=  $newLog->total_records_posting + 1;
+                    $newLog->update();
+                }
 
 
+                $odtod = CryptoHelper::encrypt(json_encode($odtod));
+
+                if(env('DF_POSTING') == 'monthly'){
+                    dispatch((new  ConsolidatePostingJob($date,$odtod,$newLog,$isLoanWisePosting))->onQueue('dfdaily'));
+                }
+              }
+              \Log::info('npafalse');
+            }
 
 
-DROP TRIGGER OD_TRANSACTIONS_HIS_ON_DEL;
+            dispatch((new  ProcessExtraCredit($date))->onQueue('dfdaily'));
 
-CREATE OR REPLACE TRIGGER od_transactions_his_on_del 
-                BEFORE DELETE
-                   ON OD_TRANSACTIONS
-                   FOR EACH ROW
-DECLARE
-                  
-                BEGIN
-                
-                INSERT INTO od_transactions_history
-                   ( discounting_id,int_reset_date,penal_reset_date,id,uuid,od_account_id,debit_from,credit_to,is_temp_od,created_by,dpd,cashback_balance,cashback_updated_date,particulars,"REMARK",tax_percent,fees_id,closing_balance,last_cron_accrual_date,seasonal_limit_id,consolidate_loans,applied_base_rate,last_cron_date,total_interest,total_penal_interest,total_monthly_interest,total_monthly_penal_interest,invoice_id,payment_request_id,"DATE",debit_entry,credit_entry,balance,interest_balance,priority,interest_indicator,is_bank_reco_tran,settlement_status,settlement_date_time,settlement_pr_id,created_at,updated_at,credit_type_id,invoice_number,currency,tran_order,penal_interest,is_overdue,overdue_date,credit_balance , history_updated_at, action_history )
-                   VALUES
-                   ( :old.discounting_id,:old.int_reset_date,:old.penal_reset_date,:old.id,:old.uuid,:old.od_account_id,:old.debit_from,:old.credit_to,:old.is_temp_od,:old.created_by,:old.dpd,:old.cashback_balance,:old.cashback_updated_date,:old.particulars,:old.remark,:old.tax_percent,:old.fees_id,:old.closing_balance,:old.last_cron_accrual_date,:old.seasonal_limit_id,:old.consolidate_loans,:old.applied_base_rate,:old.last_cron_date,:old.total_interest,:old.total_penal_interest,:old.total_monthly_interest,:old.total_monthly_penal_interest,:old.invoice_id,:old.payment_request_id,:old.date,:old.debit_entry,:old.credit_entry,:old.balance,:old.interest_balance,:old.priority,:old.interest_indicator,:old.is_bank_reco_tran,:old.settlement_status,:old.settlement_date_time,:old.settlement_pr_id,:old.created_at,:old.updated_at,:old.credit_type_id,:old.invoice_number,:old.currency,:old.tran_order,:old.penal_interest,:old.is_overdue,:old.overdue_date,:old.credit_balance  , CURRENT_TIMESTAMP, 'Delete');
-                END;
-/
+              //$this->sendPostingSms($date);
+            dispatch((new  SendPostingSms($date))->onQueue('dfdaily'));
+
+            dispatch((new  CronStatusUpdate($newLog,$this->account))->onQueue('dfdaily'));
+
+
+    }
