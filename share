@@ -66,3 +66,61 @@ select * from SYS.V_$SQLAREA;
 select  s.username,SQL_FULLTEXT,sql_text
 from SYS.V_$SQLAREA q,  SYS.V_$SESSION s
 where s.sql_hash_value = q.hash_value
+=======================================
+
+
+DROP TRIGGER OD_TRANSACTIONS_HIS_ON_INS;
+
+CREATE OR REPLACE TRIGGER od_transactions_his_on_ins 
+                AFTER INSERT
+                   ON OD_TRANSACTIONS
+                   FOR EACH ROW
+DECLARE
+                  
+                BEGIN
+                
+                INSERT INTO od_transactions_history
+                   ( discounting_id,int_reset_date,penal_reset_date,id,uuid,od_account_id,debit_from,credit_to,is_temp_od,created_by,dpd,cashback_balance,cashback_updated_date,particulars,"REMARK",tax_percent,fees_id,closing_balance,last_cron_accrual_date,seasonal_limit_id,consolidate_loans,applied_base_rate,last_cron_date,total_interest,total_penal_interest,total_monthly_interest,total_monthly_penal_interest,invoice_id,payment_request_id,"DATE",debit_entry,credit_entry,balance,interest_balance,priority,interest_indicator,is_bank_reco_tran,settlement_status,settlement_date_time,settlement_pr_id,created_at,updated_at,credit_type_id,invoice_number,currency,tran_order,penal_interest,is_overdue,overdue_date,credit_balance , history_updated_at, action_history )
+                   VALUES
+                   ( :new.discounting_id,:new.int_reset_date,:new.penal_reset_date,:new.id,:new.uuid,:new.od_account_id,:new.debit_from,:new.credit_to,:new.is_temp_od,:new.created_by,:new.dpd,:new.cashback_balance,:new.cashback_updated_date,:new.particulars,:new.remark,:new.tax_percent,:new.fees_id,:new.closing_balance,:new.last_cron_accrual_date,:new.seasonal_limit_id,:new.consolidate_loans,:new.applied_base_rate,:new.last_cron_date,:new.total_interest,:new.total_penal_interest,:new.total_monthly_interest,:new.total_monthly_penal_interest,:new.invoice_id,:new.payment_request_id,:new.date,:new.debit_entry,:new.credit_entry,:new.balance,:new.interest_balance,:new.priority,:new.interest_indicator,:new.is_bank_reco_tran,:new.settlement_status,:new.settlement_date_time,:new.settlement_pr_id,:new.created_at,:new.updated_at,:new.credit_type_id,:new.invoice_number,:new.currency,:new.tran_order,:new.penal_interest,:new.is_overdue,:new.overdue_date,:new.credit_balance  , CURRENT_TIMESTAMP, 'Inserted');                     
+                END;
+
+
+
+
+DROP TRIGGER OD_TRANSACTIONS_HIS_ON_UPDATE;
+
+CREATE OR REPLACE TRIGGER od_transactions_his_on_update 
+                AFTER UPDATE
+                   ON OD_TRANSACTIONS
+                   FOR EACH ROW
+DECLARE
+                  
+                BEGIN
+                
+                INSERT INTO od_transactions_history
+                   ( discounting_id,int_reset_date,penal_reset_date,id,uuid,od_account_id,debit_from,credit_to,is_temp_od,created_by,dpd,cashback_balance,cashback_updated_date,particulars,"REMARK",tax_percent,fees_id,closing_balance,last_cron_accrual_date,seasonal_limit_id,consolidate_loans,applied_base_rate,last_cron_date,total_interest,total_penal_interest,total_monthly_interest,total_monthly_penal_interest,invoice_id,payment_request_id,"DATE",debit_entry,credit_entry,balance,interest_balance,priority,interest_indicator,is_bank_reco_tran,settlement_status,settlement_date_time,settlement_pr_id,created_at,updated_at,credit_type_id,invoice_number,currency,tran_order,penal_interest,is_overdue,overdue_date,credit_balance , history_updated_at, action_history )
+                   VALUES
+                   ( :old.discounting_id,:old.int_reset_date,:old.penal_reset_date,:old.id,:old.uuid,:old.od_account_id,:old.debit_from,:old.credit_to,:old.is_temp_od,:old.created_by,:old.dpd,:old.cashback_balance,:old.cashback_updated_date,:old.particulars,:old.remark,:old.tax_percent,:old.fees_id,:old.closing_balance,:old.last_cron_accrual_date,:old.seasonal_limit_id,:old.consolidate_loans,:old.applied_base_rate,:old.last_cron_date,:old.total_interest,:old.total_penal_interest,:old.total_monthly_interest,:old.total_monthly_penal_interest,:old.invoice_id,:old.payment_request_id,:old.date,:old.debit_entry,:old.credit_entry,:old.balance,:old.interest_balance,:old.priority,:old.interest_indicator,:old.is_bank_reco_tran,:old.settlement_status,:old.settlement_date_time,:old.settlement_pr_id,:old.created_at,:old.updated_at,:old.credit_type_id,:old.invoice_number,:old.currency,:old.tran_order,:old.penal_interest,:old.is_overdue,:old.overdue_date,:old.credit_balance  , CURRENT_TIMESTAMP, 'Updated');
+                END;
+/
+
+
+
+
+DROP TRIGGER OD_TRANSACTIONS_HIS_ON_DEL;
+
+CREATE OR REPLACE TRIGGER od_transactions_his_on_del 
+                BEFORE DELETE
+                   ON OD_TRANSACTIONS
+                   FOR EACH ROW
+DECLARE
+                  
+                BEGIN
+                
+                INSERT INTO od_transactions_history
+                   ( discounting_id,int_reset_date,penal_reset_date,id,uuid,od_account_id,debit_from,credit_to,is_temp_od,created_by,dpd,cashback_balance,cashback_updated_date,particulars,"REMARK",tax_percent,fees_id,closing_balance,last_cron_accrual_date,seasonal_limit_id,consolidate_loans,applied_base_rate,last_cron_date,total_interest,total_penal_interest,total_monthly_interest,total_monthly_penal_interest,invoice_id,payment_request_id,"DATE",debit_entry,credit_entry,balance,interest_balance,priority,interest_indicator,is_bank_reco_tran,settlement_status,settlement_date_time,settlement_pr_id,created_at,updated_at,credit_type_id,invoice_number,currency,tran_order,penal_interest,is_overdue,overdue_date,credit_balance , history_updated_at, action_history )
+                   VALUES
+                   ( :old.discounting_id,:old.int_reset_date,:old.penal_reset_date,:old.id,:old.uuid,:old.od_account_id,:old.debit_from,:old.credit_to,:old.is_temp_od,:old.created_by,:old.dpd,:old.cashback_balance,:old.cashback_updated_date,:old.particulars,:old.remark,:old.tax_percent,:old.fees_id,:old.closing_balance,:old.last_cron_accrual_date,:old.seasonal_limit_id,:old.consolidate_loans,:old.applied_base_rate,:old.last_cron_date,:old.total_interest,:old.total_penal_interest,:old.total_monthly_interest,:old.total_monthly_penal_interest,:old.invoice_id,:old.payment_request_id,:old.date,:old.debit_entry,:old.credit_entry,:old.balance,:old.interest_balance,:old.priority,:old.interest_indicator,:old.is_bank_reco_tran,:old.settlement_status,:old.settlement_date_time,:old.settlement_pr_id,:old.created_at,:old.updated_at,:old.credit_type_id,:old.invoice_number,:old.currency,:old.tran_order,:old.penal_interest,:old.is_overdue,:old.overdue_date,:old.credit_balance  , CURRENT_TIMESTAMP, 'Delete');
+                END;
+/
