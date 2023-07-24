@@ -1,240 +1,191 @@
-public function consolidateInterestPosting($date, $newLog, $isLoanWisePosting = false){
+public function getPrograms() {
+            $max=getMaxString();
 
-           // DF posting query
-  // DB::raw( "cbc.id as credit_to_id,(CASE WHEN JSON_EXTRACT(
-  //                           b.configurations,
-  //                           '$.basic_configuration.separate_account_from_overdraft_branch_specific'
-  //                       ) THEN CONCAT(cb.account_no, br.code) ELSE cb.account_no
-  //                   END
-  //               ) AS debit_from,
-        if(isOracle()){
-            if(!empty($this->account)){
-                $filter_by = 'or od_accounts.account_number = '.$this->account;
-            }else{
-                $filter_by = '';
+            if($this->program_uuid){
+                $company_id = Band::select('company_id')->where('uuid',$this->program_uuid)->first();
             }
+            $toChar = getDatabaseKeyword('toChar');
 
-            $particulars = long_listagg('to_char(od_transactions.particulars)','particulars');
-            $invoice_numbers = long_listagg('od_transactions.invoice_number','invoice_numbers');
-            $odt_ids = long_listagg('NVL (od_transactions.id, NULL)','odt_ids');
-            $odt_currency = long_listagg('NVL (od_transactions.currency, NULL)','odt_currency');
-            $loan_ids = long_listagg('NVL (od_transactions.invoice_id, NULL)','loan_ids');
-            $applied_base_rates = long_listagg('NVL (od_transactions.applied_base_rate, NULL)','applied_base_rates');
-            $seasonal_limit_ids = long_listagg('NVL (od_transactions.seasonal_limit_id, NULL)','seasonal_limit_ids');
-            $interest_balance_details = long_listagg('NVL (od_transactions.interest_balance, NULL)','interest_balance_details');
-            $penal_interest_details = long_listagg('NVL (od_transactions.penal_interest, NULL)','penal_interest_details');
-            $invoice_ids = long_listagg('NVL (od_transactions.invoice_id, NULL)','invoice_ids');
-            $discountingids = long_listagg('NVL (od_transactions.discounting_id, NULL)','discountingids');
-            $payment_request_ids = long_listagg('NVL (od_transactions.payment_request_id, NULL)','payment_request_ids');
+            $query = Band::with('contact_details_anchor','contact_details_bank_user.user','company_banks','company_details','dfDays','program_attachment');
 
-            $sql = DB::raw("
-            SELECT  max(od_transactions.od_account_id)
-                       AS id,
-                   $odt_ids,
-                   SUM (od_transactions.interest_balance)
-                       AS interest_balance_sum,
-                   SUM (od_transactions.penal_interest)
-                       AS penal_interest_sum,
-                   (  SUM (od_transactions.interest_balance)
-                    + SUM (od_transactions.penal_interest))
-                       AS int_sum,
-                   $odt_currency,
-                   $loan_ids,
-                   $applied_base_rates,
-                   $seasonal_limit_ids,
-                   $particulars,
-                   $interest_balance_details,
-                   $penal_interest_details,
-                   $invoice_numbers,
-                   $invoice_ids,
-                   $discountingids,
-                   MAX(cd.name)
-                       AS distributor_name,
-                   MAX(cd.is_npa)
-                       AS is_npa,
-                   MAX(b.id)
-                       AS bank_id,
-                   MAX(cd.identification_no)
-                       AS buyer_identification_no,
-                   MAX(od_accounts.distributor_id)
-                       AS distributor_id,
-                   MAX(br.code)
-                       AS branch_code,
-                   MAX(to_char(b.configurations))
-                       AS bank_configurations,
-                   $payment_request_ids,
-                    (CASE
-                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') IS NOT NULL
-                    THEN
-                    CAST (JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') As DECIMAL (4, 2))
-                    ELSE 0
-                    END)
-                    min_amount,
-                   max(cbc.id) AS credit_to_id,
-                    max(od_accounts.account_number) AS debit_from,
-                    (CASE
-                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_interest_account_branch_specific') = 1
-                    THEN br.code ||'~'||cbc.account_no
-                    ELSE cbc.account_no
-                    END)
-                    credit_to,
-                   max(cbp.id) AS credit_penal_to_id,
-                    (CASE
-                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_penal_interest_account_branch_specific') = 1
-                    THEN br.code ||'~'||cbp.account_no
-                    ELSE cbp.account_no
-                    END)
-                    credit_penal_to,
-                    max(od_accounts.available_limit) as available_limit
-              FROM OD_TRANSACTIONS
-                   LEFT JOIN PAYMENT_REQUESTS
-                       ON OD_TRANSACTIONS.PAYMENT_REQUEST_ID =
-                          PAYMENT_REQUESTS.ID
-                   LEFT JOIN OD_ACCOUNTS
-                       ON PAYMENT_REQUESTS.OD_ACCOUNT_ID = OD_ACCOUNTS.ID
-                   LEFT JOIN BANKS b ON B.ID = OD_ACCOUNTS.BANK_ID
-                   LEFT JOIN COMPANY_BANKS cb ON CB.ID = JSON_VALUE ( b . configurations,
-                   '$.basic_configuration.separate_interest_receivable_account_from_overdraft')
-                   left join COMPANY_BANKS cbc on CBC.ID     =
-            JSON_VALUE         (b.configurations,  '$.basic_configuration.dis_interest_account')
-            left join COMPANY_BANKS cbp on CBP.ID =
-            JSON_VALUE(b.configurations,'$.basic_configuration.dis_penal_interest_recievable_account')
-            left join DISCOUNTINGS on PAYMENT_REQUESTS.PI_ID = DISCOUNTINGS.PI_ID and DISCOUNTINGS.STATUS = 7
-            left join PAYMENT_INSTRUCTIONS on DISCOUNTINGS.PI_ID = PAYMENT_INSTRUCTIONS.ID
-            left join COMPANIES ca on OD_ACCOUNTS.ANCHOR_ID = CA.ID
-            left join COMPANIES cd on OD_ACCOUNTS.DISTRIBUTOR_ID = CD.ID
-            left join BRANCHES br on CD.BRANCH_ID = BR.ID
-            where(INTEREST_BALANCE >  0  or PENAL_INTEREST >  0 )"
-                .$filter_by.
-                "and OD_TRANSACTIONS.IS_OVERDUE not in (1,2)
-            group by  od_transactions.od_account_id,
-                    CASE
-                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') IS NOT NULL
-                    THEN
-                    CAST (JSON_VALUE ( b.configurations,'$.basic_configuration.round_off_repayments') As DECIMAL (4, 2))
-                    ELSE 0
-                    END,
-                    CASE
-                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_interest_account_branch_specific') = 1
-                    THEN br.code ||'~'||cbc.account_no
-                    ELSE cbc.account_no
-                    END,
-                    CASE
-                    WHEN JSON_VALUE ( b.configurations,'$.basic_configuration.dis_penal_interest_account_branch_specific') = 1
-                    THEN br.code ||'~'||cbp.account_no
-                    ELSE cbp.account_no
-                    END
-                    ");
-
-            $od_transactions_by_od =DB::select($sql);
-
-        }else{
-
-            $od_transactions_by_od =OdTransaction::select(DB::raw("od_transactions.od_account_id as id,
-            group_concat(IFNULL(od_transactions.id,'NULL')) as odt_ids,
-            sum(od_transactions.interest_balance) as interest_balance_sum,
-            sum(od_transactions.penal_interest) as penal_interest_sum,
-            (sum(od_transactions.interest_balance)+sum(od_transactions.penal_interest)) as int_sum,
-            group_concat(IFNULL(od_transactions.currency,'NULL')) as odt_currency,
-            group_concat(IFNULL(od_transactions.invoice_id,'NULL')) as loan_ids,
-            group_concat(IFNULL(od_transactions.applied_base_rate,'NULL')) as applied_base_rates,
-            group_concat(IFNULL(od_transactions.seasonal_limit_id,'NULL')) as seasonal_limit_ids,
-            group_concat(IFNULL(od_transactions.particulars,'NULL')) as particulars,
-            group_concat(IFNULL(od_transactions.interest_balance,'NULL')) as interest_balance_details,
-            group_concat(IFNULL(od_transactions.penal_interest,'NULL')) as penal_interest_details,
-            group_concat(IFNULL(od_transactions.invoice_number,'NULL')) as invoice_numbers,
-            group_concat(IFNULL(od_transactions.invoice_id,'NULL')) as invoice_ids,
-            group_concat(IFNULL(od_transactions.discounting_id,'NULL')) as discountingids,
-            cd.name as distributor_name,
-            cd.is_npa,
-            b.id as bank_id,
-            cd.identification_no as buyer_identification_no,
-            od_accounts.distributor_id,od_accounts.available_limit,br.code as branch_code,b.configurations as bank_configurations,
-            od_accounts.bank_id,
-            group_concat(IFNULL(od_transactions.payment_request_id,'NULL')) AS payment_request_ids"),DB::raw("( CASE WHEN (JSON_EXTRACT( b.configurations, '$.basic_configuration.round_off_repayments' ) IS NOT NULL or JSON_EXTRACT( b.configurations, '$.basic_configuration.round_off_repayments' ) != '') THEN CAST(JSON_EXTRACT(b.configurations, '$.basic_configuration.round_off_repayments') AS DECIMAL(4,2)) ELSE 0 END ) AS min_amount"),
-            DB::raw( "cbc.id as credit_to_id,od_accounts.account_number AS debit_from,
-
-                    (CASE WHEN JSON_EXTRACT(
-                        b.configurations,
-                        '$.basic_configuration.dis_interest_account_branch_specific'
-                    ) THEN CONCAT(br.code,'~',cbc.account_no) ELSE cbc.account_no
-                END
-                ) AS credit_to,
-
-                cbp.id as credit_penal_to_id, (CASE WHEN JSON_EXTRACT(
-                        b.configurations,
-                        '$.basic_configuration.dis_penal_interest_recievable_account_branch_specific'
-                    ) THEN CONCAT(br.code,'~',cbp.account_no) ELSE cbp.account_no
-                END
-                ) AS credit_penal_to"
-            ))
-
-            ->leftJoin('payment_requests', 'od_transactions.payment_request_id', '=', 'payment_requests.id')
-            ->leftJoin('od_accounts', 'payment_requests.od_account_id', '=', 'od_accounts.id')
-            ->leftJoin('banks as b', 'b.id', '=', 'od_accounts.bank_id')
-            ->leftJoin('company_banks as cb','cb.id',DB::Raw("JSON_UNQUOTE(JSON_EXTRACT(b.configurations,'$.basic_configuration.separate_interest_receivable_account_from_overdraft'))"))
-            ->leftJoin('company_banks as cbc','cbc.id',DB::Raw("JSON_UNQUOTE(JSON_EXTRACT(b.configurations,'$.basic_configuration.dis_interest_account'))"))
-            ->leftJoin('company_banks as cbp','cbp.id',DB::Raw("JSON_UNQUOTE(JSON_EXTRACT(b.configurations,'$.basic_configuration.dis_penal_interest_recievable_account'))"))
-
-            ->leftJoin('discountings', function($join) {
-            $join->on('payment_requests.pi_id', '=', 'discountings.pi_id');
-            $join->where('discountings.status', '=', 7);
-            })
-
-            ->leftJoin('payment_instructions', 'discountings.pi_id', '=', 'payment_instructions.id')
-            ->leftJoin('companies as ca', 'od_accounts.anchor_id', '=', 'ca.id')
-            ->leftJoin('companies as cd', 'od_accounts.distributor_id', '=', 'cd.id')
-            ->leftJoin('branches as br', 'cd.branch_id', '=', 'br.id')
-            ->where(function($q) {
-                $q->where('interest_balance', '>', 0)
-                ->orWhere('penal_interest', '>', 0);
+            $query->leftjoin('funding_limits as f', function ($join) {
+                $join->on('f.company_id', '=', 'bands.company_id')
+                ->on('f.type', '=', 'bands.type')->on('f.band_id', '=', 'bands.id');
             });
-            if(!empty($this->account)){
-                $od_transactions_by_od = $od_transactions_by_od->where('od_accounts.account_number', $this->account);
+            $query->leftjoin('band_configurations', 'band_configurations.band_id', '=', 'bands.id');
+            $query->leftjoin('companies as cms', 'band_configurations.seller_id', '=', 'cms.id');
+            $query->leftjoin('companies as cmsd', 'band_configurations.buyer_id', '=', 'cmsd.id');
+            $query->leftjoin('users as usc', 'usc.id', '=', 'bands.created_by');
+            $query->leftjoin('users as usu', 'usu.id', '=', 'bands.updated_by');
+            $query->leftjoin('companies as c', 'c.id', '=', 'bands.company_id');
+            $query->leftjoin('base_rate_titles as br', 'br.id', '=', 'bands.base_rate_id');
+            $query->leftjoin('third_party_system as partner', 'partner.id', 'bands.partner_id');
+
+            if(isClient('jaikishan')){
+                $query->leftjoin('on_time_process_fees as pf', 'bands.id', 'pf.program_id');
             }
-            $od_transactions_by_od = $od_transactions_by_od->whereNotIn('od_transactions.is_overdue',[1,2])
-            ->groupby('od_transactions.od_account_id')
-            ->get();
+
+            if(isset($company_id)){
+                $query->with(['company_banks' => function ($q) use($company_id) {
+                    $q->where('company_banks.company_id','=',$company_id->company_id);
+                }]);
+            }else{
+                $query->with('company_banks');
+            }
+
+            $query->select(DB::raw("$max(bands.uuid) uuid, $max(bands.id) id, $max(bands.company_id) company_id,$max(bands.name) name, $max(bands.discounting) discounting, $max(bands.manualDiscounting) manualdiscounting, $max(bands.type) type, $max(bands.discounting_proposed) discounting_proposed, $max(bands.manualDiscounting_proposed) manualdiscounting_proposed, $max(bands.max_limit) max_limit, $max(bands.recourse) recourse, $max(bands.anchor_interest_share) anchor_interest_share, $max(bands.seller_interest_share) seller_interest_share, $max(bands.days_limit_to_change_invdue_dt) days_limit_to_change_invdue_dt, $max(bands.max_days_for_inv_due_dt_ext) max_days_for_inv_due_dt_ext, $max(bands.enable_auto_finance) enable_auto_finance, $max(bands.default_payment_terms) default_payment_terms, $max(bands.min_financing_days) min_financing_days, $max(bands.max_financing_days) max_financing_days, $max(bands.change_payment_term) change_payment_term, $max(bands.auto_debit) auto_debit, $max(bands.maximum_allowed_invoice_amount) maximum_allowed_invoice_amount, $max(bands.interest_type) interest_type, $max(bands.prog_approved_date) prog_approved_date, $max(bands.tax_fees) tax_fees, $max(bands.grace_period) grace_period, $max(bands.credit_period) credit_period, $max(bands.status) status, $max(bands.emi_day) emi_day, $max(bands.credit_emi_from) credit_emi_from, $max(f.approve_limit) approve_limit, $max(f.buyer_limit) buyer_limit, $max(f.buyer_current_exposure) buyer_current_exposure,$max(bands.tenor_days) tenor_days,$max(bands.base_rate_id) base_rate_id,$max(bands.base_rate) base_rate,$max(bands.auto_debit_fin_inv) auto_debit_fin_inv,$max(bands.apply_user_info) apply_user_info,
+                $max(bands.repayment_appropriation) repayment_appropriation,
+                $max(bands.product_code) product_code,
+                $max(bands.collection_acc) collection_acc,
+                $max(bands.spread_rate_for_due_date_extension) spread_rate_for_due_date_extension,
+                $max(bands.stop_supply_days) stop_supply_days,
+                $max(bands.fldg_days) fldg_days,
+                $max(bands.partner_id) partner_id,
+                $max(bands.exit_date) exit_date,
+                $max(" . lob_to_string("bands.exit_remark") .") exit_remark,
+                $max(bands.segment) segment,
+                $max(partner.client_name) client_name,
+                $max(bands.days_stale_inv_period) days_stale_inv_period,
+                $max(bands.program_code) program_code,
+                $max(bands.reset_frequency_days) reset_frequency_days,
+                $max(bands.inv_attach_mandatory_flag) inv_attach_mandatory_flag,
+                $max(bands.consolidate_utr) consolidate_utr,
+                $max(bands.predefined_vendor_list_status) predefined_vendor_list_status,
+                $max(bands.auto_approve_finance) auto_approve_finance,
+                $max(bands.pid_account_no) pid_account_no,
+                $max(bands.drawing_power) drawing_power,
+                $max(bands.vendor_code) vendor_code,
+                $max(bands.gst_no) gst_no,
+                $max(bands.scheme_code) scheme_code,
+                $max(bands.prepay_reversal) prepay_reversal,
+                $max(bands.limit_review_date) limit_review_date,
+                $max(bands.anchor_fee_recovery) anchor_fee_recovery,
+                $max(bands.dd_applicable) dd_applicable,
+                $max(bands.noa_type) noa_type,
+                $max(bands.limits_on) limits_on,
+                $max(bands.limit_loan_acc) limit_loan_acc,
+                $max(bands.due_date_calculated_from) due_date_calculated_from,
+                $max(f.buyer_pipeline_request) buyer_pipeline_request,
+                $max(f.available_limit) available_limit,
+                $max(f.expiry_date) expiry_date,
+                $max(bands.created_at) created_at,
+                $max(bands.updated_at) updated_at,
+                $max(bands.active_status) active_status,
+                $max(bands.rejection_remark) rejection_remark,
+                $max(bands.level1_rejected_by) level1_rejected_by,
+                $max(bands.updated_by) updated_by,
+                $max(bands.factoring_collection_ac) factoring_collection_ac,
+                $max(bands.factoring_loan_ac) factoring_loan_ac,
+                $max(bands.max_penal_days) max_penal_days,
+                $max(bands.overdue_interest_rate) overdue_interest_rate,
+                $max(bands.penal_interest_on_interest) penal_interest_on_interest,
+                $max(bands.penal_rate) penal_rate,
+                $max(bands.buyer_inv_appr_req) buyer_inv_appr_req,
+                $max(bands.created_by) created_by,
+                $max(bands.change_maturity_date) change_maturity_date,
+                $max(" . lob_to_string("bands.original_fields") .") original_fields,
+                $max(" . lob_to_string("bands.proposed_fields") .") proposed_fields,
+                sum(case when band_configurations.status = 0 or band_configurations.status = 3 then 1 else 0 end) bccount,
+                $max(c.identification_no) identification_no,
+                $max(c.registration_no) registration_no,
+                $max(c.branch_id) branch_id,
+                $max(br.title) base_rate_title,
+                $max(usu.name) userUpdatedBy,
+                $max(usc.name) userCreatedBy,$max((SELECT count(uuid) FROM band_configurations bc WHERE bc.band_id = bands.id)) mappedcompany,
+                $max(band_configurations.loan_account_number) loan_account_number,
+                $max(bands.loan_account_number) program_loan_account_number,
+                $max(c.name) program_company_name,
+                $max(bands.credit_spread) credit_spread,
+                $max(bands.grace_period_int) grace_period_int,
+                $max(bands.business_spread) business_spread"
+            ));
+
+$query->selectRaw("$max(CASE WHEN (bands.status = 2) THEN 1
+    WHEN (bands.status = 4) THEN 1
+    WHEN (bands.status = 1) THEN 2
+    WHEN (bands.status = 3) THEN 3
+    ELSE 4 END) order_status");
+        /*$query->addSelect(DB::raw('count(band_configurations.id) bandmap_count'));
+        $query->addSelect(DB::raw('count(cms.id) comp_count'));*/
+        $query->addSelect(DB::raw("count(CASE WHEN cms.status = 1 AND band_configurations.status!=2 THEN cms.id ELSE null END)  active_sellerMapped"));
+        $query->addSelect(DB::raw("count(CASE WHEN cmsd.status = 1 AND band_configurations.status!=2 THEN cmsd.id ELSE null END)  active_distributorMapped"));
+
+        if(isClient('jaikishan')){
+         $query->addSelect('pf.id processing_fee_id', 'pf.status processing_fee_status');
+     }
+     /*[Start::-Geo location]*/
+        if(isset($this->geoCompany) && !in_array(0, $this->geoCompany)){//Record visibility only me
+            $query->whereIn('bands.company_id',$this->geoCompany);
+        }
+        if(isset($this->geoBranches)){//Bank User geo location
+            $query->whereIn('c.branch_id',$this->geoBranches);
+        }
+        /*[End::-Geo location]*/
+
+        if ($this->program_name) {
+            $keywords = strtolower(trim($this->program_name));
+            $query->whereRaw("(lower(bands.name) like '%$keywords%')");
+        }
+        if ($this->loan_account_no) {
+            $keywords = strtolower(encryptField(trim($this->loan_account_no)));
+            $query->whereRaw("(lower(band_configurations.loan_account_number) like '%$keywords%')");
         }
 
-           \Log::info("od_transactions_by_od::".json_encode($od_transactions_by_od));
+        if ($this->type) {
+            $query = $query->where('bands.type', $this->type);
+        }
 
+        ////Branch filter for bank user
+        if (isset($this->branches) && !empty($this->branches) && !in_array(0,$this->branches)) {
+            $query->whereIn('c.branch_id',$this->branches);
+        }
 
-           $settingNpaIntPosting = !empty(env('NPA_INT_POSTING')) ? env('NPA_INT_POSTING') : false;
-           \Log::info('settingNpaIntPosting::'.json_encode($settingNpaIntPosting));
-            foreach($od_transactions_by_od as $k=>$odtod){
-                \Log::info('odtod::'.json_encode($odtod->is_npa));
-             $odtod->credit_to = getEncryptedGL($odtod->credit_to);
-              $odtod->credit_penal_to = getEncryptedGL($odtod->credit_penal_to);
+        if ($this->company_name) {
+            $comName = $this->company_name;
+            $query = $query->wherehas('company_details', function ($q) use ($comName){
+                // $q->where(DB::raw('lower(companies.name)'), 'like', '%' . strtolower(trim($comName)) . '%');
+                $q->where('companies.name', '=', encryptField(trim($comName)));
+            });
+        }
 
-             //$odtod->invoice_numbers = decryptString($odtod->invoice_numbers,'~~');
-             // $odtod->invoice_numbers = $odtod->invoice_numbers);
+        if ($this->active_status != '') {
+            $query = $query->where('bands.active_status', $this->active_status);
+        }
 
-             $odtod->check_type='posting';
-             if($odtod->is_npa != 1 || ($odtod->is_npa == 1 && $settingNpaIntPosting)){
-                \Log::info('npa;');
-                if((env('DF_PENAL_POSTING') != 'monthly' && $odtod->interest_balance_sum > 0) || env('DF_PENAL_POSTING') == 'monthly'){
-                    $newLog->total_records_posting=  $newLog->total_records_posting + 1;
-                    $newLog->update();
-                }
+        if ($this->status != '') {
+            if ($this->status == '4') {
+                $query = $query->whereIn('bands.status', [2, 4]);
+            } else {
+                $query = $query->where('bands.status', $this->status);
+            }
+        }
 
+        if(isset($this->applicableProducts) && !empty($this->applicableProducts)){
+            $query->whereIn('bands.type',$this->applicableProducts);
+        }
 
-                $odtod = CryptoHelper::encrypt(json_encode($odtod));
+        if(isset($this->enabledProducts) && !empty($this->enabledProducts)){
+            $query->whereIn('bands.type',$this->enabledProducts);
+        }
 
-                if(env('DF_POSTING') == 'monthly'){
-                    dispatch((new  ConsolidatePostingJob($date,$odtod,$newLog,$isLoanWisePosting))->onQueue('dfdaily'));
-                }
-              }
-              \Log::info('npafalse');
+        $query->groupBy('bands.name');
+        /*$query->orderBy(DB::raw('bands.status=2'), 'desc')
+             ->orderBy(DB::raw('bands.status=4'), 'desc')
+             ->orderBy(DB::raw('bands.status'), 'asc')
+             ->orderBy(DB::raw('lower(bands.name)'));*/
+
+             $query->orderBy('order_status', 'asc')->orderBy('bccount', 'desc')->orderBy(DB::raw('lower(bands.name)'));
+             if (Input::has('excelButton') || (Input::has('loan_account_no') && !empty(Input::get('loan_account_no'))) || (Input::has('company_name') && !empty(Input::get('company_name'))) || $this->isPagiante == false) {
+                $this->isPagiante = false;
             }
 
-
-            dispatch((new  ProcessExtraCredit($date))->onQueue('dfdaily'));
-
-              //$this->sendPostingSms($date);
-            dispatch((new  SendPostingSms($date))->onQueue('dfdaily'));
-
-            dispatch((new  CronStatusUpdate($newLog,$this->account))->onQueue('dfdaily'));
-
-
-    }
+            if($this->program_uuid) {
+                $result = $query->where('bands.uuid', $this->program_uuid)->first();
+            }elseif ($this->isPagiante && !Input::has('excelButton')) {
+                $result = $query->paginate(15);
+            } else {
+                $result = $query->get();
+            }
+        //dd($result, $query->toSql());
+            return $result;
+        }
