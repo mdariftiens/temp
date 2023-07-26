@@ -1,8 +1,22 @@
-app/Helpers/DBCompatibleFunctions.php  group_concat_multiple_column()
+function group_concat($column_name, $alias = '', $separator=',', $distinct=''){
 
+    validateColumnName($column_name);
+
+    if (isMysql()  && strpos($column_name, '.')>0){
+        $column_name = implode("`.`", explode(".",$column_name));
+    }
+
+    $distinct = strtoupper($distinct);
+
+    validateDistinct($distinct);
+
+    validateSeparator($separator);
 
     if(isOracle()){
-        $columnString = implode("|| '$separator' || ", $columns);
-        return long_listagg($columnString,$alias);
-        // return " LISTAGG($columnString, ',') " . getAliasString($alias);
+        return long_listagg($column_name,$alias);
+        //return " LISTAGG( $distinct $column_name, '$separator')" . getAliasString($alias);
     }
+    if(isMysql()){
+       return " GROUP_CONCAT(DISTINCT `".$column_name."`) ".getAliasString($alias);
+    }
+}
