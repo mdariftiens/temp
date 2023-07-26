@@ -1,0 +1,8 @@
+app/Helpers/DBCompatibleFunctions.php  group_concat_multiple_column()
+
+
+    if(isOracle()){
+        $columnString = implode("|| '$separator' || ", $columns);
+        return long_listagg($columnString,$alias);
+        // return " LISTAGG($columnString, ',') " . getAliasString($alias);
+    }
