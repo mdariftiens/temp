@@ -1,191 +1,23 @@
-public function getPrograms() {
-            $max=getMaxString();
-
-            if($this->program_uuid){
-                $company_id = Band::select('company_id')->where('uuid',$this->program_uuid)->first();
-            }
-            $toChar = getDatabaseKeyword('toChar');
-
-            $query = Band::with('contact_details_anchor','contact_details_bank_user.user','company_banks','company_details','dfDays','program_attachment');
-
-            $query->leftjoin('funding_limits as f', function ($join) {
-                $join->on('f.company_id', '=', 'bands.company_id')
-                ->on('f.type', '=', 'bands.type')->on('f.band_id', '=', 'bands.id');
-            });
-            $query->leftjoin('band_configurations', 'band_configurations.band_id', '=', 'bands.id');
-            $query->leftjoin('companies as cms', 'band_configurations.seller_id', '=', 'cms.id');
-            $query->leftjoin('companies as cmsd', 'band_configurations.buyer_id', '=', 'cmsd.id');
-            $query->leftjoin('users as usc', 'usc.id', '=', 'bands.created_by');
-            $query->leftjoin('users as usu', 'usu.id', '=', 'bands.updated_by');
-            $query->leftjoin('companies as c', 'c.id', '=', 'bands.company_id');
-            $query->leftjoin('base_rate_titles as br', 'br.id', '=', 'bands.base_rate_id');
-            $query->leftjoin('third_party_system as partner', 'partner.id', 'bands.partner_id');
-
-            if(isClient('jaikishan')){
-                $query->leftjoin('on_time_process_fees as pf', 'bands.id', 'pf.program_id');
-            }
-
-            if(isset($company_id)){
-                $query->with(['company_banks' => function ($q) use($company_id) {
-                    $q->where('company_banks.company_id','=',$company_id->company_id);
-                }]);
-            }else{
-                $query->with('company_banks');
-            }
-
-            $query->select(DB::raw("$max(bands.uuid) uuid, $max(bands.id) id, $max(bands.company_id) company_id,$max(bands.name) name, $max(bands.discounting) discounting, $max(bands.manualDiscounting) manualdiscounting, $max(bands.type) type, $max(bands.discounting_proposed) discounting_proposed, $max(bands.manualDiscounting_proposed) manualdiscounting_proposed, $max(bands.max_limit) max_limit, $max(bands.recourse) recourse, $max(bands.anchor_interest_share) anchor_interest_share, $max(bands.seller_interest_share) seller_interest_share, $max(bands.days_limit_to_change_invdue_dt) days_limit_to_change_invdue_dt, $max(bands.max_days_for_inv_due_dt_ext) max_days_for_inv_due_dt_ext, $max(bands.enable_auto_finance) enable_auto_finance, $max(bands.default_payment_terms) default_payment_terms, $max(bands.min_financing_days) min_financing_days, $max(bands.max_financing_days) max_financing_days, $max(bands.change_payment_term) change_payment_term, $max(bands.auto_debit) auto_debit, $max(bands.maximum_allowed_invoice_amount) maximum_allowed_invoice_amount, $max(bands.interest_type) interest_type, $max(bands.prog_approved_date) prog_approved_date, $max(bands.tax_fees) tax_fees, $max(bands.grace_period) grace_period, $max(bands.credit_period) credit_period, $max(bands.status) status, $max(bands.emi_day) emi_day, $max(bands.credit_emi_from) credit_emi_from, $max(f.approve_limit) approve_limit, $max(f.buyer_limit) buyer_limit, $max(f.buyer_current_exposure) buyer_current_exposure,$max(bands.tenor_days) tenor_days,$max(bands.base_rate_id) base_rate_id,$max(bands.base_rate) base_rate,$max(bands.auto_debit_fin_inv) auto_debit_fin_inv,$max(bands.apply_user_info) apply_user_info,
-                $max(bands.repayment_appropriation) repayment_appropriation,
-                $max(bands.product_code) product_code,
-                $max(bands.collection_acc) collection_acc,
-                $max(bands.spread_rate_for_due_date_extension) spread_rate_for_due_date_extension,
-                $max(bands.stop_supply_days) stop_supply_days,
-                $max(bands.fldg_days) fldg_days,
-                $max(bands.partner_id) partner_id,
-                $max(bands.exit_date) exit_date,
-                $max(" . lob_to_string("bands.exit_remark") .") exit_remark,
-                $max(bands.segment) segment,
-                $max(partner.client_name) client_name,
-                $max(bands.days_stale_inv_period) days_stale_inv_period,
-                $max(bands.program_code) program_code,
-                $max(bands.reset_frequency_days) reset_frequency_days,
-                $max(bands.inv_attach_mandatory_flag) inv_attach_mandatory_flag,
-                $max(bands.consolidate_utr) consolidate_utr,
-                $max(bands.predefined_vendor_list_status) predefined_vendor_list_status,
-                $max(bands.auto_approve_finance) auto_approve_finance,
-                $max(bands.pid_account_no) pid_account_no,
-                $max(bands.drawing_power) drawing_power,
-                $max(bands.vendor_code) vendor_code,
-                $max(bands.gst_no) gst_no,
-                $max(bands.scheme_code) scheme_code,
-                $max(bands.prepay_reversal) prepay_reversal,
-                $max(bands.limit_review_date) limit_review_date,
-                $max(bands.anchor_fee_recovery) anchor_fee_recovery,
-                $max(bands.dd_applicable) dd_applicable,
-                $max(bands.noa_type) noa_type,
-                $max(bands.limits_on) limits_on,
-                $max(bands.limit_loan_acc) limit_loan_acc,
-                $max(bands.due_date_calculated_from) due_date_calculated_from,
-                $max(f.buyer_pipeline_request) buyer_pipeline_request,
-                $max(f.available_limit) available_limit,
-                $max(f.expiry_date) expiry_date,
-                $max(bands.created_at) created_at,
-                $max(bands.updated_at) updated_at,
-                $max(bands.active_status) active_status,
-                $max(bands.rejection_remark) rejection_remark,
-                $max(bands.level1_rejected_by) level1_rejected_by,
-                $max(bands.updated_by) updated_by,
-                $max(bands.factoring_collection_ac) factoring_collection_ac,
-                $max(bands.factoring_loan_ac) factoring_loan_ac,
-                $max(bands.max_penal_days) max_penal_days,
-                $max(bands.overdue_interest_rate) overdue_interest_rate,
-                $max(bands.penal_interest_on_interest) penal_interest_on_interest,
-                $max(bands.penal_rate) penal_rate,
-                $max(bands.buyer_inv_appr_req) buyer_inv_appr_req,
-                $max(bands.created_by) created_by,
-                $max(bands.change_maturity_date) change_maturity_date,
-                $max(" . lob_to_string("bands.original_fields") .") original_fields,
-                $max(" . lob_to_string("bands.proposed_fields") .") proposed_fields,
-                sum(case when band_configurations.status = 0 or band_configurations.status = 3 then 1 else 0 end) bccount,
-                $max(c.identification_no) identification_no,
-                $max(c.registration_no) registration_no,
-                $max(c.branch_id) branch_id,
-                $max(br.title) base_rate_title,
-                $max(usu.name) userUpdatedBy,
-                $max(usc.name) userCreatedBy,$max((SELECT count(uuid) FROM band_configurations bc WHERE bc.band_id = bands.id)) mappedcompany,
-                $max(band_configurations.loan_account_number) loan_account_number,
-                $max(bands.loan_account_number) program_loan_account_number,
-                $max(c.name) program_company_name,
-                $max(bands.credit_spread) credit_spread,
-                $max(bands.grace_period_int) grace_period_int,
-                $max(bands.business_spread) business_spread"
-            ));
-
-$query->selectRaw("$max(CASE WHEN (bands.status = 2) THEN 1
-    WHEN (bands.status = 4) THEN 1
-    WHEN (bands.status = 1) THEN 2
-    WHEN (bands.status = 3) THEN 3
-    ELSE 4 END) order_status");
-        /*$query->addSelect(DB::raw('count(band_configurations.id) bandmap_count'));
-        $query->addSelect(DB::raw('count(cms.id) comp_count'));*/
-        $query->addSelect(DB::raw("count(CASE WHEN cms.status = 1 AND band_configurations.status!=2 THEN cms.id ELSE null END)  active_sellerMapped"));
-        $query->addSelect(DB::raw("count(CASE WHEN cmsd.status = 1 AND band_configurations.status!=2 THEN cmsd.id ELSE null END)  active_distributorMapped"));
-
-        if(isClient('jaikishan')){
-         $query->addSelect('pf.id processing_fee_id', 'pf.status processing_fee_status');
-     }
-     /*[Start::-Geo location]*/
-        if(isset($this->geoCompany) && !in_array(0, $this->geoCompany)){//Record visibility only me
-            $query->whereIn('bands.company_id',$this->geoCompany);
-        }
-        if(isset($this->geoBranches)){//Bank User geo location
-            $query->whereIn('c.branch_id',$this->geoBranches);
-        }
-        /*[End::-Geo location]*/
-
-        if ($this->program_name) {
-            $keywords = strtolower(trim($this->program_name));
-            $query->whereRaw("(lower(bands.name) like '%$keywords%')");
-        }
-        if ($this->loan_account_no) {
-            $keywords = strtolower(encryptField(trim($this->loan_account_no)));
-            $query->whereRaw("(lower(band_configurations.loan_account_number) like '%$keywords%')");
-        }
-
-        if ($this->type) {
-            $query = $query->where('bands.type', $this->type);
-        }
-
-        ////Branch filter for bank user
-        if (isset($this->branches) && !empty($this->branches) && !in_array(0,$this->branches)) {
-            $query->whereIn('c.branch_id',$this->branches);
-        }
-
-        if ($this->company_name) {
-            $comName = $this->company_name;
-            $query = $query->wherehas('company_details', function ($q) use ($comName){
-                // $q->where(DB::raw('lower(companies.name)'), 'like', '%' . strtolower(trim($comName)) . '%');
-                $q->where('companies.name', '=', encryptField(trim($comName)));
-            });
-        }
-
-        if ($this->active_status != '') {
-            $query = $query->where('bands.active_status', $this->active_status);
-        }
-
-        if ($this->status != '') {
-            if ($this->status == '4') {
-                $query = $query->whereIn('bands.status', [2, 4]);
-            } else {
-                $query = $query->where('bands.status', $this->status);
-            }
-        }
-
-        if(isset($this->applicableProducts) && !empty($this->applicableProducts)){
-            $query->whereIn('bands.type',$this->applicableProducts);
-        }
-
-        if(isset($this->enabledProducts) && !empty($this->enabledProducts)){
-            $query->whereIn('bands.type',$this->enabledProducts);
-        }
-
-        $query->groupBy('bands.name');
-        /*$query->orderBy(DB::raw('bands.status=2'), 'desc')
-             ->orderBy(DB::raw('bands.status=4'), 'desc')
-             ->orderBy(DB::raw('bands.status'), 'asc')
-             ->orderBy(DB::raw('lower(bands.name)'));*/
-
-             $query->orderBy('order_status', 'asc')->orderBy('bccount', 'desc')->orderBy(DB::raw('lower(bands.name)'));
-             if (Input::has('excelButton') || (Input::has('loan_account_no') && !empty(Input::get('loan_account_no'))) || (Input::has('company_name') && !empty(Input::get('company_name'))) || $this->isPagiante == false) {
-                $this->isPagiante = false;
-            }
-
-            if($this->program_uuid) {
-                $result = $query->where('bands.uuid', $this->program_uuid)->first();
-            }elseif ($this->isPagiante && !Input::has('excelButton')) {
-                $result = $query->paginate(15);
-            } else {
-                $result = $query->get();
-            }
-        //dd($result, $query->toSql());
-            return $result;
-        }
+function getOdDetailsDateWise($uuid, $year = null){
+    if(!empty($uuid)){
+        $year = (!empty($year)) ? $year : date('Y');
+        $odAccount = DB::table('od_accounts')->select('id')->where('uuid', $uuid)->first();
+        $odYears = DB::table('od_transactions')
+                    ->select(DB::raw(extract_date_component('"DATE"', 'year', 'year')))
+                    ->distinct()
+                    ->where('od_account_id', $odAccount->id)
+                    ->get();
+        $years = $odYears->pluck('year');
+        $odMonths = DB::table('od_transactions')
+                    ->select(DB::raw(extract_date_component('"DATE"', 'month', 'month')))
+                    ->distinct()
+                    ->where('od_account_id', $odAccount->id)
+                    ->whereYear('date', $year)
+                    ->get();
+        $months = $odMonths->pluck('month');
+        $result['years'] = $years;
+        $result['months'] = $months;
+        $result['uuid'] = $uuid;
+        return $result;
+    }
+}
