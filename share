@@ -3,13 +3,13 @@ function getOdDetailsDateWise($uuid, $year = null){
         $year = (!empty($year)) ? $year : date('Y');
         $odAccount = DB::table('od_accounts')->select('id')->where('uuid', $uuid)->first();
         $odYears = DB::table('od_transactions')
-                    ->select(DB::raw(extract_date_component('"DATE"', 'year', 'year')))
+                    ->select(DB::raw(extract_date_component(handleDBSpecificKeyword('DATE'), 'year', 'year')))
                     ->distinct()
                     ->where('od_account_id', $odAccount->id)
                     ->get();
         $years = $odYears->pluck('year');
         $odMonths = DB::table('od_transactions')
-                    ->select(DB::raw(extract_date_component('"DATE"', 'month', 'month')))
+                    ->select(DB::raw(extract_date_component(handleDBSpecificKeyword('DATE'), 'month', 'month')))
                     ->distinct()
                     ->where('od_account_id', $odAccount->id)
                     ->whereYear('date', $year)
