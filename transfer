@@ -1,16 +1,5 @@
-resources/views/bank/program/mapNewSeller.blade.php
+app/Repository/Eloquent/InvoiceRepo.php
 
+$query->where('invoices.invoice_number', 'like', '%' . strtolower(trim(Input::get('invoice_number'))) . '%');
 
-.multiselect-container {
-    width: 100% !important;
-}
-.overlap_fix{
-    margin-top: 5px;
-}
-
-
-
- <span id="loan_ac_noErr" class="forActiveSpan error" style="color:red;line-height:1.2;margin-top:2px"></span>
-
-
-<div class="col-lg-4 col-md-6 col-sm-6 col-xs-12 deep_tier_fields overlap_fix">
+ $query->whereRaw("LOWER(invoices.invoice_number) LIKE ?", ['%' . strtolower(trim(Input::get('invoice_number'))) . '%']);
