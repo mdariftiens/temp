@@ -1,5 +1,6 @@
-app/Repository/Eloquent/InvoiceRepo.php
+app/Repository/Eloquent/BankProgramRepo.php : 3304
 
-$query->where('invoices.invoice_number', 'like', '%' . strtolower(trim(Input::get('invoice_number'))) . '%');
-
- $query->whereRaw("LOWER(invoices.invoice_number) LIKE ?", ['%' . strtolower(trim(Input::get('invoice_number'))) . '%']);
+if(env('CLIENT') == 'yesbank' && $cust_id_enable == 1){
+                $bc = BandConfiguration::select('id')->where('uuid', $request->program_map_id)->first();
+                $rules['cust_id'] = 'required|unique:band_configurations,cust_id'.(isset($bc->id)?',' . $bc->id: '');
+            }
