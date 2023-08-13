@@ -1,0 +1,20 @@
+D:\laragon\www\githubprojects\scf-indianbank\app\Repository\Eloquent\OdAccountRepo.php
+  public function dfMigrationSaveToTkTrns($request){
+
+if ($rowDataCount > 1 && !array_filter($row_original)) {
+                        continue;
+                    }
+                    $rowDataCount++;
+-------------
+$row_original[1]=implode("-", explode("/", $row_original[1]));
+                    $row_original[5]=implode("-", explode("/", $row_original[5]));
+                    $row_original[11]=implode("-", explode("/", $row_original[11]));
+
+--------------------
+
+ "date_(dd/mm/yyyy)" => "required|date|date_format:d-m-Y",
+                        "due_date_(dd/mm/yyyy)" => "required_unless:type,Repayment,Offline Debit|date|date_format:d-m-Y",
+                        "as_of_(dd/mm/yyyy)" => "required_unless:type,Repayment|date|date_format:d-m-Y",
+
+-----------------
+Excel Change format (df_migration) dd-mm-yyyy to dd-mm-yyyy
