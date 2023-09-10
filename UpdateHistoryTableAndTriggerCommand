@@ -1,0 +1,964 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Symfony\Component\Console\Helper\ProgressBar;
+
+
+class UpdateHistoryTableAndTriggerCommand extends Command
+{
+    protected $signature = 'UpdateTrigger {--makeNewHistoryTable=false}';
+
+    protected $description = 'Command description';
+    protected array $oracle_reserved_key = ['date','remark','group'];
+
+    public function handle()
+    {
+        $allow_hist_table = [
+            [
+                'base_table' => 'auth_matrix_approvals',
+                'his_table' => 'auth_matrix_approvals_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'attachments',
+                'his_table' => 'attachments_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'priority_if',
+                'his_table' => 'priority_if_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'branches',
+                'his_table' => 'branches_history',
+                'need_insert_tr' => 'N',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'if_daily_accruals',
+                'his_table' => 'if_daily_accruals_history',
+                'need_insert_tr' => 'N',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'od_daily_interest',
+                'his_table' => 'od_daily_interest_history',
+                'need_insert_tr' => 'N',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'cbs_instructions_accrual',
+                'his_table' => 'cbs_instructions_accrual_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'bands',
+                'his_table' => 'bands_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'band_configurations',
+                'his_table' => 'band_configurations_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'banks',
+                'his_table' => 'bank_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'base_rate_titles',
+                'his_table' => 'base_rate_titles_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'cbs_instructions',
+                'his_table' => 'cbs_instructions_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'companies',
+                'his_table' => 'companies_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'company_banks',
+                'his_table' => 'company_banks_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'currency_convertor',
+                'his_table' => 'currency_convertor_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'df_repayments',
+                'his_table' => 'df_repayments_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'discountings',
+                'his_table' => 'discountings_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'drawdowns',
+                'his_table' => 'drawdowns_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'event_rules',
+                'his_table' => 'event_rules_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'factoring_priorities',
+                'his_table' => 'factoring_priorities_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'factoring_sales_limit',
+                'his_table' => 'factoring_sales_limit_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'funding_limits',
+                'his_table' => 'funding_limits_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'group_masters',
+                'his_table' => 'group_masters_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'if_transactions',
+                'his_table' => 'if_transactions_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'invoices',
+                'his_table' => 'invoices_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'invoice_approval_checker',
+                'his_table' => 'invoice_approval_checker_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'invoice_approval_matrix',
+                'his_table' => 'invoice_approval_matrix_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'od_accounts',
+                'his_table' => 'od_accounts_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'od_priorities',
+                'his_table' => 'od_priorities_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'od_seasonal_limits',
+                'his_table' => 'od_seasonal_limits_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'od_transactions',
+                'his_table' => 'od_transactions_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'payments',
+                'his_table' => 'payments_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'payment_instructions',
+                'his_table' => 'payment_instructions_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'payment_requests',
+                'his_table' => 'payment_requests_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'pool_accounts',
+                'his_table' => 'pool_accounts_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'purchase_orders',
+                'his_table' => 'purchase_orders_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'seller_settings',
+                'his_table' => 'seller_settings_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'takeover_transactions',
+                'his_table' => 'takeover_transactions_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'takeover_transactions_vf',
+                'his_table' => 'takeover_transactions_vf_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'tax',
+                'his_table' => 'tax_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'tax_transactions',
+                'his_table' => 'tax_transactions_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'third_party_system',
+                'his_table' => 'third_party_system_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'top_funding_limits',
+                'his_table' => 'top_funding_limits_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'underwritings',
+                'his_table' => 'underwritings_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'users',
+                'his_table' => 'users_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'df_band_discounting_rates',
+                'his_table' => 'dfband_discoun_rates_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'df_od_discounting_rates',
+                'his_table' => 'dfod_discoun_rates_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+            [
+                'base_table' => 'factoring_invoice_payments',
+                'his_table' => 'factoring_invoice_pay_history',
+                'need_insert_tr' => 'Y',
+                'need_update_tr' => 'Y',
+                'need_delete_tr' => 'Y'
+            ],
+        ];
+
+        $exclude_hist_table = ['password_history','pass_history','npa_history'];
+
+        $totalIterations = count($allow_hist_table);
+        $progressBar = $this->output->createProgressBar($totalIterations);
+
+        if(isOracle()){
+            $this->dropTriggersInOracle('INST_INTO\_%');
+        }else{
+            $this->dropTriggersInMysql('insert_into_');
+        }
+
+        foreach ($allow_hist_table as $table){
+            $baseTable = $table['base_table'];
+            $historyTable = $table['his_table'];
+            if ( $this->option('makeNewHistoryTable')=='true' && Schema::hasTable($historyTable) ){
+                Schema::drop($historyTable);
+            }
+            /*** start create new history table block ***/
+            if(!Schema::hasTable($historyTable)){
+                $this->createTable($historyTable, $baseTable);
+            }
+            /*** end create new history table block ***/
+                /*** start rename column to history table block ***/
+//                $this->renameColumnForHistoryTable($table, $historyTable);
+                /*** end rename column to history table block ***/
+
+            $mainTableColumns = array_filter(Schema::getColumnListing($baseTable), fn($t)=> !str_contains($t, '$')?$t:null);
+//                $historyTableColumns = array_filter(Schema::getColumnListing($historyTable), fn($t)=> !str_contains($t, '$')?$t:null) ;
+//                $tempHistoryTableColumns = $historyTableColumns;
+//
+//                $tempHistoryTableColumns = array_filter($tempHistoryTableColumns, fn($i) => !in_array($i,['history_updated_at', 'action_history']));
+//                $historyTableColumnsWithoutActionAndUpdatedAt = $tempHistoryTableColumns;
+//                /*** start add new column to history table block ***/
+//                $newColumns = array_diff($mainTableColumns, $historyTableColumnsWithoutActionAndUpdatedAt);
+//                if (count($newColumns)>0){
+//                    $this->addNewColsToHistoryTable($table,$historyTable, $newColumns);
+//                }
+            /*** end add new column to history table block ***/
+
+            /*** start modify column to history table block ***/
+//                $this->modifyColumnForHistoryTable($table, $historyTable);
+            /*** end modify column to history table block ***/
+            /*** start modify column to history table block ***/
+            //$this->modifyColumnForHistoryTable($table, $historyTable);
+            /*** end modify column to history table block ***/
+
+            /*** start drop column from history table block ***/
+//                $this->dropColsFromHistoryTable($table,$historyTable);
+            /*** end column from history table block ***/
+            /*** start drop column from history table block ***/
+            //$this->dropColsFromHistoryTable($table,$historyTable);
+            /*** end column from history table block ***/
+            $main_tbl_info = $this->getColumnDefinition($baseTable);
+            $his_tbl_info = $this->getColumnDefinition($historyTable);
+
+            $main_tbl_col = array_column($main_tbl_info,'column_name');
+            $his_tbl_col = array_column($his_tbl_info,'column_name');
+
+            $differences = array_diff($main_tbl_col, $his_tbl_col);
+
+            if(count($differences) > 0){
+                $this->info("\n Column mismatch found between $baseTable and $historyTable. Please check ".implode(", ",$differences));
+                return;
+            }
+
+            if($table['need_insert_tr'] == 'Y') {
+                $this->createOrUpdateInsertTrigger($baseTable, $mainTableColumns, $historyTable);
+            }
+
+            if($table['need_update_tr'] == 'Y') {
+                $this->createOrUpdateUpdateTrigger($baseTable, $mainTableColumns, $historyTable);
+            }
+
+            if ($table['need_delete_tr'] == 'Y') {
+                $this->createOrUpdateDeleteTrigger($baseTable, $mainTableColumns, $historyTable);
+            }
+
+            $progressBar->advance();
+        }
+        $progressBar->finish();
+        $this->info("\n Congratulations! You have successfully done it");
+    }
+
+    private function createTable(string $historyTable, string $baseTable)
+    {
+        DB::statement("CREATE TABLE $historyTable 
+           AS SELECT * FROM $baseTable WHERE 1=0");
+
+        if(isOracle()){
+            DB::statement("ALTER TABLE $historyTable
+                ADD (
+                    history_updated_at DATE DEFAULT CURRENT_TIMESTAMP,
+                    action_history VARCHAR2(30)
+                )"
+            );
+        }
+        if(isMysql()){
+            DB::statement("ALTER TABLE $historyTable
+                ADD COLUMN (
+                    history_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    action_history VARCHAR(30)
+                )"
+            );
+        }
+
+        $this->info("\n table $historyTable created");
+    }
+
+    private function addNewColsToHistoryTable(string $table, string $historyTable, $newColumns)
+    {
+        $mainTableColumnsWithDifination = $this->getColumnDefinition($table);
+        $newColumns = array_map( function ($i){
+           if (isOracle()){
+               return strtoupper($i);
+           }
+           return $i;
+        },$newColumns);
+
+        $newColumnsDef = collect($mainTableColumnsWithDifination)->whereIn('column_name', $newColumns)->toArray();
+
+        $genereatedNewColsDef = $this->generateColumnDefinition($newColumnsDef);
+        if (count($genereatedNewColsDef)>0){
+            if (isMysql()){
+                $column = 0;
+                foreach ($newColumnsDef as $key => $value){
+                    if($key > 0 ){
+                        DB::statement("ALTER TABLE $historyTable ADD $genereatedNewColsDef[$column] AFTER {$mainTableColumnsWithDifination[$key-1]->column_name}");
+                        $column++;
+                    }
+                }
+            }
+
+            if(isOracle()) {
+                DB::statement("ALTER TABLE $historyTable ADD (" . implode(",", $genereatedNewColsDef) . ") ");
+            }
+            $this->alterNewColumnPosition($historyTable,$newColumns);
+        }
+        $this->info("added new cols to $historyTable table\n");
+    }
+
+    private function dropColsFromHistoryTable(string $table, string $historyTable)
+    {
+        $mainTableColumns = array_column($this->getColumnDefinition($table), 'column_name');
+        $historyTableColumns = array_column($this->getColumnDefinition($historyTable), 'column_name');
+        $tempHistoryTableColumns = array_filter($historyTableColumns, fn($i) => !in_array(strtolower($i),['history_updated_at', 'action_history']));
+        $colsNeedToDrop = array_diff($tempHistoryTableColumns, $mainTableColumns);
+        if (count($colsNeedToDrop)>0){
+            $colsNeedToDrop = array_map( function ($i){
+                if (isOracle()){
+                    return strtoupper($i);
+                }
+                return $i;
+            },$colsNeedToDrop);
+
+            $colsNameAsString = implode(",", $colsNeedToDrop);
+            if (isOracle()){
+                DB::statement("alter table $historyTable drop ( ".$colsNameAsString." ) ");
+            }
+            if (isMysql()){
+                $sql = "ALTER TABLE $historyTable";
+                foreach ($colsNeedToDrop as $key=>$column){
+                    $sql .= " DROP COLUMN $column,";
+                }
+                $sql = rtrim($sql, ',');
+                DB::statement("$sql");
+            }
+            $this->info("drop cols $colsNameAsString from $table table\n");
+        }
+
+    }
+
+    private function createOrUpdateInsertTrigger($table, $mainTableColumns, $historyTableName){
+        $newValueColumns = [];
+        $columns_name = [];
+        foreach ($mainTableColumns as $mainTableColumn){
+            if (isOracle()){
+                if(in_array(strtolower($mainTableColumn),$this->oracle_reserved_key)){
+                    $columns_name[] = handleDBSpecificKeyword($mainTableColumn);
+                }else{
+                    $columns_name[] = $mainTableColumn;
+                }
+            }else{
+                $columns_name[] = $mainTableColumn;
+            }
+            $newValueColumns[] = ":new.".$mainTableColumn;
+        }
+        $pl = "CREATE OR REPLACE TRIGGER ".$table."_his_on_ins 
+                AFTER INSERT
+                   ON $table
+                   FOR EACH ROW
+                DECLARE
+                  
+                BEGIN
+                
+                INSERT INTO $historyTableName
+                   ( ".implode(",", $columns_name)." , history_updated_at, action_history )
+                   VALUES
+                   ( ".implode(",", $newValueColumns)."  , CURRENT_TIMESTAMP, 'Inserted');                     
+                END;";
+        if(isMysql()){
+            DB::unprepared("DROP TRIGGER IF EXISTS {$table}_his_on_ins");
+            $pl = ("
+            CREATE TRIGGER {$table}_his_on_ins AFTER INSERT ON {$table}
+            FOR EACH ROW
+            BEGIN
+                INSERT INTO {$historyTableName}
+                SELECT *, CURRENT_TIMESTAMP, 'Inserted' FROM {$table} WHERE id = NEW.id;
+            END
+        ");
+        }
+        DB::statement($pl);
+    }
+
+    private function createOrUpdateUpdateTrigger($table, $mainTableColumns, $historyTableName){
+        $newValueColumns = [];
+        $columns_name = [];
+        foreach ($mainTableColumns as $mainTableColumn){
+            if (isOracle()){
+                if(in_array(strtolower($mainTableColumn),$this->oracle_reserved_key)){
+                    $columns_name[] = handleDBSpecificKeyword($mainTableColumn);
+                }else{
+                    $columns_name[] = $mainTableColumn;
+                }
+            }else{
+                $columns_name[] = $mainTableColumn;
+            }
+            $newValueColumns[] = ":old.".$mainTableColumn;
+        }
+        $pl = "CREATE OR REPLACE TRIGGER ".$table."_his_on_update 
+                AFTER UPDATE
+                   ON $table
+                   FOR EACH ROW
+                DECLARE
+                  
+                BEGIN
+                
+                INSERT INTO $historyTableName
+                   ( ".implode(",", $columns_name)." , history_updated_at, action_history )
+                   VALUES
+                   ( ".implode(",", $newValueColumns)."  , CURRENT_TIMESTAMP, 'Updated');
+                END;";
+        if(isMysql()){
+            DB::unprepared("DROP TRIGGER IF EXISTS {$table}_his_on_update");
+            $pl = ("
+            CREATE TRIGGER {$table}_his_on_update BEFORE UPDATE ON {$table}
+            FOR EACH ROW
+            BEGIN
+                INSERT INTO {$historyTableName}
+                SELECT *, CURRENT_TIMESTAMP, 'Updated' FROM {$table} WHERE id = NEW.id;
+            END
+        ");
+        }
+        DB::statement($pl);
+    }
+
+    private function createOrUpdateDeleteTrigger($table, $mainTableColumns, $historyTableName){
+        $newValueColumns = [];
+        $columns_name = [];
+        foreach ($mainTableColumns as $mainTableColumn){
+            if (isOracle()){
+                if(in_array(strtolower($mainTableColumn),$this->oracle_reserved_key)){
+                    $columns_name[] = handleDBSpecificKeyword($mainTableColumn);
+                }else{
+                    $columns_name[] = $mainTableColumn;
+                }
+            }else{
+                $columns_name[] = $mainTableColumn;
+            }
+            $newValueColumns[] = ":old.".$mainTableColumn;
+        }
+
+        $pl = "CREATE OR REPLACE TRIGGER ".$table."_his_on_del 
+                BEFORE DELETE
+                   ON $table
+                   FOR EACH ROW
+                DECLARE
+                  
+                BEGIN
+                
+                INSERT INTO $historyTableName
+                   ( ".implode(",", $columns_name)." , history_updated_at, action_history )
+                   VALUES
+                   ( ".implode(",", $newValueColumns)."  , CURRENT_TIMESTAMP, 'Delete');
+                END;";
+
+        if(isMysql()){
+            DB::unprepared("DROP TRIGGER IF EXISTS {$table}_his_on_del");
+            $pl = ("
+            CREATE TRIGGER {$table}_his_on_del BEFORE DELETE ON {$table}
+            FOR EACH ROW
+            BEGIN
+                INSERT INTO {$historyTableName}
+                SELECT *, CURRENT_TIMESTAMP, 'Delete' FROM {$table} WHERE id = OLD.id;
+            END
+        ");
+        }
+        DB::statement($pl);
+    }
+
+    private function getTableList(){
+
+        if (isOracle()){
+            $tableNames = DB::select(DB::raw("SELECT table_name FROM all_tables WHERE owner = '".env("ORACLE_DB_OWNER")."' and lower(table_name) not like'%_history'"));
+        }
+
+        if (isMysql()){
+            $tableNames = DB::select(DB::raw("SELECT table_name FROM information_schema.tables WHERE table_schema = '".env('MYSQL_TABLE_SCHEMA')."' AND table_type = 'BASE TABLE'"));
+        }
+        $finalTableNameList = [];
+        foreach ($tableNames as $tableName){
+            $finalTableNameList[] = $tableName->table_name;
+        }
+        return $finalTableNameList;
+    }
+
+    private function getColumnDefinition($tableName,$columnName =null){
+        if (isOracle()){
+            if ($columnName){
+                return DB::select(DB::raw("
+                    SELECT
+                        COLUMN_NAME,
+                        DATA_TYPE,
+                        DATA_LENGTH,
+                        DATA_PRECISION,
+                        DATA_SCALE,
+                        NULLABLE,
+                        DATA_DEFAULT
+                    FROM ALL_TAB_COLS
+                    where lower(TABLE_NAME) = lower('$tableName') and lower(column_name) = lower('$columnName')
+                      and owner = '".env("ORACLE_DB_OWNER")."'
+                      AND SUBSTR(COLUMN_NAME, 1, 6) <> ('SYS_NC') ORDER BY COLUMN_ID ASC"));
+            }
+            return DB::select(DB::raw("
+                    SELECT
+                        COLUMN_NAME,
+                        DATA_TYPE,
+                        DATA_LENGTH,
+                        DATA_PRECISION,
+                        DATA_SCALE,
+                        NULLABLE,
+                        DATA_DEFAULT
+                    FROM ALL_TAB_COLS
+                    where lower(TABLE_NAME) = lower('$tableName') and owner = '".env("ORACLE_DB_OWNER")."' AND SUBSTR(COLUMN_NAME, 1, 6) <> ('SYS_NC') ORDER BY COLUMN_ID ASC"));
+
+
+
+        }
+        if (isMysql()){
+            return DB::select(DB::raw("SELECT
+                lower(column_name) column_name,
+                lower(data_type) data_type,
+                character_maximum_length as data_length,
+                numeric_precision as data_precision,
+                numeric_scale as data_scale,
+                CASE is_nullable
+                        when 'YES' then 'Y'
+                        else 'N' end as nullable,
+                column_default as data_default,
+                lower(column_type) column_type
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = '$tableName' and table_schema = '".env('MYSQL_TABLE_SCHEMA')."' ORDER BY ordinal_position ASC"));
+        }
+    }
+
+    public function generateColumnDefinition($mainTableColumnsDefinition): array
+    {
+        $historyTableColumns = [];
+        foreach ($mainTableColumnsDefinition as $mainTableColumn) {
+            $columName = $mainTableColumn->column_name;
+            if (isOracle()){
+                if(in_array(strtolower($columName),$this->oracle_reserved_key)){
+                    $columName = handleDBSpecificKeyword($columName);
+                }
+            }
+            $nullString = empty($mainTableColumn->nullable)||$mainTableColumn->nullable == "Y"? "" : " NOT NULL";
+            if ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('integer') || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('double')
+                || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('smallint') || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('bigint')
+                || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('decimal')) {
+                $defaultString = $mainTableColumn->data_default ? " DEFAULT " . $mainTableColumn->data_default : '';
+                $data_scale = $mainTableColumn->data_scale??0;
+                if (isMysql()){
+                    $data_precision = $mainTableColumn->data_precision??null;
+                    if ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('double')){
+                        $historyTableColumns[] = $columName . " " . $mainTableColumn->column_type  . $defaultString . $nullString;
+                    }else{
+                        $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . '(' . $data_precision . ') ' . $defaultString . $nullString;
+                    }
+                }else{
+                    $data_precision = $mainTableColumn->data_precision??10;
+                    if($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('float')){
+                        $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . '(' . $data_precision . ') ' . $defaultString . $nullString;
+                    }else {
+                        $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . '(' . $data_precision . ',' . $data_scale . ') ' . $defaultString . $nullString;
+                    }
+                }
+            } elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('string')|| $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('char')) {
+                $defaultString = $mainTableColumn->data_default ? " DEFAULT " . "'$mainTableColumn->data_default'": '';
+                if(isOracle()){
+                    $defaultString = $mainTableColumn->data_default ? " DEFAULT " . "$mainTableColumn->data_default": '';
+                }
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . '(' . $mainTableColumn->data_length . ") $defaultString " . $nullString;
+            } elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('date')) {
+                $defaultString = $mainTableColumn->data_default ? " DEFAULT '" . $mainTableColumn->data_default . "'" : '';
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . " $defaultString " . $nullString;
+            } elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('character') || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('text')) {
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . $nullString;
+            } elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('timestamp') || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('datetime')
+                || $mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('timestamp(6)')) {
+                $defaultString = $mainTableColumn->data_default ? " DEFAULT " . $mainTableColumn->data_default : '';
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . " $defaultString " . $nullString;
+            } elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('boolean')) {
+                $defaultString = $mainTableColumn->data_default ? " DEFAULT " . $mainTableColumn->data_default : '';
+                if(isMysql()){
+                    $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type .'(1)'. $defaultString . $nullString;
+                }else{
+                    $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type . " $defaultString " . $nullString;
+                }
+            }elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('enum')) {
+                $defaultString = $mainTableColumn->data_default ? " DEFAULT " . "'$mainTableColumn->data_default'" : '';
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->column_type . " $defaultString " . $nullString;
+            }elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('json')){
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->column_type;
+            }elseif ($mainTableColumn->data_type == $this->getDateTypesWithDbCompatibility('binary')){
+                $historyTableColumns[] = $columName . " " . $mainTableColumn->data_type;
+            }else {
+//                dd("new type column", $mainTableColumn);
+            }
+        }
+        return $historyTableColumns;
+    }
+
+    private function modifyColumnForHistoryTable($table, $historyTable){
+        $arrayObj1 = $this->getColumnDefinition($table);
+        $arrayObj2 = $this->getColumnDefinition($historyTable);
+        $modifiedColumnsDef = [];
+        foreach ($arrayObj1 as $key => $object1) {
+            $object2 = (array)$arrayObj2[$key];
+            $object1Array = json_decode(json_encode($object1), true);
+            $object2Array = json_decode(json_encode($object2), true);
+            $object1Array['data_default'] = trim($object1Array['data_default']);
+            $object2Array['data_default'] = trim($object2Array['data_default']);
+            if (isMysql()){
+                if (!in_array(trim($object1Array['data_type']),['json','enum'])
+                    || !in_array(trim($object2Array['data_type']),['json','enum'])){
+                    unset($object1Array['column_type']);
+                    unset($object2Array['column_type']);
+                }
+                if (in_array(trim($object1Array['data_type']),['int','tinyint'])
+                    || in_array(trim($object2Array['data_type']),['int','tinyint'])){
+                    unset($object1Array['data_default']);
+                    unset($object2Array['data_default']);
+                }
+            }
+            $differences = array_diff_assoc($object1Array, $object2Array);
+            if ($differences) {
+                if(isset($differences->nullable)){
+                    $modifiedColumnsDef[] = $object1;
+                }else{
+                    $object1->nullable = '';
+                    $modifiedColumnsDef[] = $object1;
+                }
+            }
+        }
+
+        if ($modifiedColumnsDef && count($modifiedColumnsDef) > 0) {
+            $modifiedColumns = $this->generateColumnDefinition($modifiedColumnsDef);
+            if (isOracle()){
+                DB::statement("ALTER TABLE $historyTable MODIFY (" . implode(", ", $modifiedColumns) . ")");
+            }
+            if (isMysql()){
+                $sql = "ALTER TABLE $historyTable";
+                foreach ($modifiedColumns as $key=>$column){
+                    $sql .= " MODIFY COLUMN $column,";
+                }
+                $sql = rtrim($sql, ',');
+                DB::statement("$sql");
+            }
+        }
+    }
+
+    private function alterNewColumnPosition(string $table, $newColumn){
+        if(isOracle()){
+            foreach ($newColumn as $k=>$newCol){
+                DB::statement("ALTER TABLE $table MODIFY (HISTORY_UPDATED_AT INVISIBLE, ACTION_HISTORY INVISIBLE, $newCol INVISIBLE)");
+                DB::statement("ALTER TABLE $table MODIFY ($newCol VISIBLE)");
+                DB::statement("ALTER TABLE $table MODIFY (HISTORY_UPDATED_AT VISIBLE)");
+                DB::statement("ALTER TABLE $table MODIFY (ACTION_HISTORY VISIBLE)");
+            }
+        }
+    }
+
+    private function renameColumnForHistoryTable($table, $historyTable){
+        $arrayObj1 = $this->getColumnDefinition($table);
+        $arrayObj2 = $this->getColumnDefinition($historyTable);
+
+        $historyTableColumnNames = (collect($arrayObj2)->pluck('column_name'))->toArray();
+        $mainTableColumnNames = (collect($arrayObj1)->pluck('column_name'))->toArray();
+        $historyTableColumnNamesLower = array_map('strtolower',$historyTableColumnNames);
+        $mainTableColumnNamesLower = array_map('strtolower',$mainTableColumnNames);
+
+        foreach ($arrayObj1 as $key => $object1) {
+            $object2 = (array)$arrayObj2[$key];
+            $main_tbl_col= [];
+            $his_tbl_col= [];
+            if (!in_array(strtolower($object2['column_name']),['history_updated_at','action_history'])){
+                $main_tbl_col['column_name'] = strtolower($object1->column_name);
+                $his_tbl_col['column_name'] = strtolower($object2['column_name']);
+                $differences = array_diff_assoc($main_tbl_col, $his_tbl_col);
+                if ($differences && !in_array($main_tbl_col["column_name"], $historyTableColumnNamesLower)) {
+                    if(isset($his_tbl_col) && isset($main_tbl_col)){
+                        DB::statement("ALTER TABLE $historyTable rename column ".$his_tbl_col['column_name'] ." to ".$main_tbl_col['column_name']);
+                        $this->info("rename $historyTable from ".$his_tbl_col['column_name'] ." to ".$main_tbl_col['column_name']."\n");
+                    }
+                }
+            }
+        }
+    }
+
+    private function getDateTypesWithDbCompatibility(string $dataType){
+        $dataType = strtolower($dataType);
+        $oracleDataTypes = array(
+            'integer' => 'NUMBER',
+            'float' => 'FLOAT',
+            'string' => 'VARCHAR2',
+            'date' => 'DATE',
+            'datetime' => 'DATE',
+            'boolean' => 'BOOLEAN',
+            'binary' => 'BLOB',
+            'char' => 'CHAR',
+            'money' => 'NUMBER',
+            'geometric' => 'SDO_GEOMETRY',
+            'character'=> 'CLOB',
+            'decimal'=>'FLOAT',
+            'text'=>'CLOB',
+            'timestamp'=>'DATE',
+            'enum'=>'',
+            'double'=>'NUMBER',
+            'smallint'=>'NUMBER',
+            'bigint'=>'NUMBER',
+            'json'=>'CLOB',
+            'timestamp(6)'=>'TIMESTAMP(6)',
+        );
+
+        $mysqlDataTypes = array(
+            'integer' => 'int',
+            'float' => 'float',
+            'string' => 'varchar',
+            'date' => 'date',
+            'datetime' => 'datetime',
+            'boolean' => 'tinyint',
+            'binary' => 'blob',
+            'char' => 'char',
+            'money' => 'decimal',
+            'geometric' => 'geometry',
+            'character'=> 'longtext',
+            'decimal'=>'decimal',
+            'text'=>'text',
+            'timestamp'=>'timestamp',
+            'enum'=>'enum',
+            'double'=>'double',
+            'smallint'=>'smallint',
+            'bigint'=>'bigint',
+            'json'=>'json',
+            'timestamp(6)'=>'datetime',
+        );
+
+        if (isOracle()){
+            if (isset($dataType)){
+                return $oracleDataTypes[$dataType];
+            }
+        }
+        if (isMysql()){
+            if (isset($dataType)){
+                return $mysqlDataTypes[$dataType];
+            }
+        }
+    }
+
+    private function dropTriggersInMysql($pattern)
+    {
+        $schema_name = env('MYSQL_TABLE_SCHEMA');
+        $triggers = DB::select("SELECT TRIGGER_NAME 
+                           FROM information_schema.TRIGGERS
+                           WHERE trigger_schema = '$schema_name'
+                           AND TRIGGER_NAME LIKE ?", ["$pattern%"]);
+
+        foreach ($triggers as $trigger) {
+            DB::unprepared("DROP TRIGGER IF EXISTS {$trigger->TRIGGER_NAME}");
+        }
+
+    }
+
+    private function dropTriggersInOracle($pattern)
+    {
+        $query = "BEGIN 
+                FOR rec IN (SELECT trigger_name  
+                            FROM user_triggers
+                            WHERE trigger_name LIKE :pattern ESCAPE '\') LOOP
+                  EXECUTE IMMEDIATE 'DROP TRIGGER ' || rec.trigger_name;
+                END LOOP;
+             END;";
+
+        DB::statement($query, ['pattern' => $pattern]);
+
+    }
+}
