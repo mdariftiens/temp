@@ -65,3 +65,10 @@ app/Repository/Eloquent/UserRepo.php
         }
         return $changed_fields;
     }
+
+resources/views/bank/user/pendingApprovalModal.blade.php
+
+{{$pending_approval['contactNo']}}
+                                                            @elseif($key == 'emp_id')
+                                                                {{$pending_approval['emp_id']}}	
+
