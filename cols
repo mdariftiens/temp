@@ -20,3 +20,48 @@ function group_concat($column_name, $alias = '', $separator=',', $distinct=''){
        return " GROUP_CONCAT(DISTINCT `".$column_name."`) ".getAliasString($alias);
     }
 }
+
+app/Repository/Eloquent/UserRepo.php
+
+  public function getPendingApprovals($id)
+    {
+        $pending = User::where('uuid', $id)->first();
+        $approval = UserCompany::where('user_id', $pending->id)->first();
+        $proposed_fileds = [];
+        $changed_fields = [];
+        if (!empty($id) && !empty($pending->proposed_field) && ($pending->approval_type == '2' || $pending->approval_type == '4' || $approval->approval_type == '4')){
+            $proposed_fileds = json_decode($pending->proposed_field, TRUE);
+            //dd($proposed_fileds['contactNo'],decryptField($pending['contact']));
+            $removeFields = [];
+            if(isset($proposed_fileds['name'])){
+            if($proposed_fileds['name'] != decryptField($pending['name'])){
+                $changed_fields['name']=$proposed_fileds['name'];
+            }
+            }
+            if(isset($proposed_fileds['email'] )){
+            if($proposed_fileds['email'] != decryptField($pending['email'])){
+                $changed_fields['email']=$proposed_fileds['email'];
+            }
+            }
+            if(isset($proposed_fileds['contactNo'] )){
+            if($proposed_fileds['contactNo'] != decryptField($pending['contact'])){
+                $changed_fields['contactNo']=$proposed_fileds['contactNo'];
+            }
+            }
+            if(isset($proposed_fileds['role_id'] )){
+            if($proposed_fileds['role_id'] != $pending['role_id']){
+                $changed_fields['role_id']=$proposed_fileds['role_id'];
+            }
+            }
+            if($proposed_fileds['status'] != $pending['status']){
+                $changed_fields['status']=$proposed_fileds['status'];
+            }
+            if(isset($proposed_fileds['emp_id'] )){
+                if($proposed_fileds['emp_id'] != $pending['emp_id']){
+                    $changed_fields['emp_id']=$proposed_fileds['emp_id'];
+                }
+            }
+
+        }
+        return $changed_fields;
+    }
