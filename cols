@@ -1,3 +1,6 @@
+
+
+function yblclient(){
 $server       = env('FIN_DB_HOST');
 $db_username  = env('FIN_DB_USERNAME');
 $db_password  = env('FIN_DB_PASSWORD');
@@ -5,8 +8,100 @@ $service_name = env('FIN_SERVICE_NAME');
 $sid          = env('FIN_SID');
 $port         = env('FIN_DB_PORT');
 $dbtns        = "(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = $server)(PORT = $port)) (CONNECT_DATA = (SERVICE_NAME = $service_name) (SID = $sid)))";
-$dbh = new \PDO("oci:dbname=" . $dbtns . ";charset=utf8", $db_username, $db_password,  array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_EMULATE_PREPARES => false, \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC));
-$sql = "SELECT a.cod_cust CBS_CUSTID, b.cod_acct_no CBS_AC_NO, DECODE(A.COD_ACCT_STAT,8,'OPEN',1,'CLOSED',2,'BLOCKED',3,'NO_DEBIT',7,'DORMANT',A.COD_ACCT_STAT) CBS_AC_STATUS, a.amt_od_limit CBS_Sanction_Limit, a.BAL_AVAILABLE CBS_UTILISED_AMT , b.expire_date fcr_EXP_DATE FROM fcrlive_1.ch_acct_mast a, (SELECT cod_acct_no, MAX(dat_limit_end) expire_date FROM fcrlive_1.ch_od_limit GROUP BY cod_acct_no ) b, fcrlive_1.ch_od_limit c WHERE a.cod_acct_no = b.cod_acct_no(+) and a.cod_acct_no=c.cod_acct_no and b.expire_date=c.dat_limit_end and   a.cod_prod in('869','819','219') AND a.flg_mnt_status='A';";
+$dbh = new \PDO("oci:dbname=" . $dbtns . ";", $db_username, $db_password, array(  \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_EMULATE_PREPARES => true, \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC));
+$sql = "SELECT a.cod_cust CBS_CUSTID, b.cod_acct_no CBS_AC_NO, DECODE(A.COD_ACCT_STAT,8,'OPEN',1,'CLOSED',2,'BLOCKED',3,'NO_DEBIT',7,'DORMANT',A.COD_ACCT_STAT) CBS_AC_STATUS, a.amt_od_limit CBS_Sanction_Limit, a.BAL_AVAILABLE CBS_UTILISED_AMT , b.expire_date fcr_EXP_DATE FROM fcrlive_1.ch_acct_mast a, (SELECT cod_acct_no, MAX(dat_limit_end) expire_date FROM fcrlive_1.ch_od_limit GROUP BY cod_acct_no ) b, fcrlive_1.ch_od_limit c WHERE a.cod_acct_no = b.cod_acct_no(+) and a.cod_acct_no=c.cod_acct_no and b.expire_date=c.dat_limit_end and   a.cod_prod in('869','819','219') AND a.flg_mnt_status='A'";
 $sql_stmt = $dbh->prepare($sql);
 $sql_stmt->execute();
 $result = $sql_stmt->fetchAll(\PDO::FETCH_ASSOC);
+return collect($result)->take(10);
+}
+
+
+
+===
+
+
+
+ [
+      [
+        "CBS_CUSTID" => "5752",
+        "CBS_AC_NO" => "000181900001000 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "5759",
+        "CBS_AC_NO" => "000181900001079 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "5824",
+        "CBS_AC_NO" => "000181900001536 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "5838",
+        "CBS_AC_NO" => "000181900001676 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "5883",
+        "CBS_AC_NO" => "000181900002084 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "6026",
+        "CBS_AC_NO" => "000181900003404 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "6057",
+        "CBS_AC_NO" => "000181900003622 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "19608",
+        "CBS_AC_NO" => "000381900000578 ",
+        "CBS_AC_STATUS" => "NO_DEBIT",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "-1462004.35",
+        "FCR_EXP_DATE" => "20-OCT-22",
+      ],
+      [
+        "CBS_CUSTID" => "6154",
+        "CBS_AC_NO" => "000181900004054 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+      [
+        "CBS_CUSTID" => "6153",
+        "CBS_AC_NO" => "000181900004061 ",
+        "CBS_AC_STATUS" => "CLOSED",
+        "CBS_SANCTION_LIMIT" => "0",
+        "CBS_UTILISED_AMT" => "0",
+        "FCR_EXP_DATE" => "27-DEC-07",
+      ],
+    ],
+  }
