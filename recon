@@ -1,0 +1,154 @@
+
+    public function yblReconciliation()
+    {
+        $max = getMaxString();
+	$datetime= Carbon::now();
+        $cronArr = [
+            'date' => $datetime,
+            'product' => 'IF DF',
+            'cron' => 'yblReconciliation',
+            'display_name' => 'Reconciliation bank data'
+        ];
+
+    
+            $this->saveCronLog($cronArr);
+
+            BankReconciliation::truncate();
+
+            $od_accounts = OdAccount::select(
+                DB::raw("
+                $max(od_accounts.id) id,
+                od_accounts.account_number,
+                sum(od_accounts.available_limit) as available_limit,
+                sum(od_accounts.limit_utilies) as limit_utilies,
+                $max(od_accounts.od_expiry_date) as expiry_date,
+                $max(band_configurations.drawingpower) as drawing_power"
+                ))->join('band_configurations','band_configurations.ID','od_accounts.band_configurations_id')
+                ->groupBy('od_accounts.account_number')->get();
+
+            $loan_accounts =DB::table('band_configurations')
+                ->join('bands','bands.id','band_configurations.band_id')
+                ->leftjoin('funding_limits','band_configurations.id','funding_limits.band_configuration_id')
+                ->select('bands.id','funding_limits.available_limit',DB::raw('band_configurations.loan_account_number account_number'),'band_configurations.cust_id', 'band_configurations.drawingpower as drawing_power', 'funding_limits.seller_current_exposure as limit_utilies','funding_limits.expiry_date as expiry_date')
+
+                ->where('bands.type','invoice')
+                ->get();
+
+            $originalExternalYblDataCollection =  $this->getYblReconciliationBankData();
+            
+            $yblDataWithAccNo = [];
+            $yblDataWithCustId = [];
+		$total = -1;
+
+            foreach ($originalExternalYblDataCollection as $value){
+                $yblDataWithAccNo[$value->cbs_ac_no]= $value;
+                $yblDataWithCustId[$value->cbs_custid]= $value;	
+		//if(isset($yblDataWithAccNo[$od->account_number])) $total++;
+            }
+		$i = 0;
+            foreach ($od_accounts as $od) {
+                if(isset($yblDataWithAccNo[($od->account_number)])){
+		//	dispatchSync((new  InsertYblReconciliationDataJob($od, $yblDataWithAccNo[($od->account_number)])));
+			$ybl = new  \App\Jobs\InsertYblReconciliationDataJob($od, $yblDataWithAccNo[$od->account_number],$total,$i,$datetime);
+
+                    dispatch($ybl)->onQueue('reconciliationjobs');
+			$i++;
+                }            }
+            /*foreach ($loan_accounts as $loan_acc) {
+                if(isset($yblDataWithCustId[$loan_acc->cust_id])){
+                    //dispatch((new  InsertYblReconciliationDataJob($loan_acc, $yblDataWithCustId[$loan_acc->cust_id]))->onQueue('reconciliationjobs'));
+			$ybl = new  \App\Jobs\InsertYblReconciliationDataJob($loan_acc, $yblDataWithCustId[$loan_acc->cust_id]);
+
+                    dispatch($ybl)->onQueue('reconciliationjobs');
+
+                }
+            }
+*/
+            $this->markCronExecuted($cronArr);
+		echo "cron executed";
+	
+
+    }
+
+=============================
+
+<?php
+
+namespace App\Jobs;
+
+use App\Models\BankReconciliation;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Log,Mail,DB;
+use Carbon\Carbon;
+
+class InsertYblReconciliationDataJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $data;
+    public $yblDataRow;
+    /**
+     * Create a new job instance.
+     *
+     * @return void
+     */
+    public function __construct($accountDetail,$yblDataRow,$total,$i,$datetime)
+    {
+        
+        $this->data = $accountDetail;
+        $this->yblDataRow = $yblDataRow;
+	$this->total = $total;
+	$this->i = $i;
+	$this->datetime = $datetime;
+        
+    }
+
+    /**
+     * Execute the job.
+     *
+     * @return void
+     */
+    public function handle()
+   	{
+            $data = array();
+            $data['account_number'] = ($this->data->account_number);
+            $data['sanction_limit'] = $this->data->available_limit;
+            $data['drawing_power'] = $this->data->drawing_power;
+            
+            $data['utilized_limit'] = $this->data->limit_utilies;
+            $data['available_balance'] = $this->data->available_limit;
+            $data['expiry_date'] = Carbon::parse($this->data->expiry_date)->format('Y-m-d');
+		$data['created_at'] = now();
+		$data['updated_at'] = now();
+            $data['type'] = (isset($this->data->account_number)) ? 'DF' : 'IF';
+            if (isset($this->yblDataRow)) {
+                $data['cbs_sanction_limit'] = $this->yblDataRow->cbs_sanction_limit; //CBS_SANCTION_LIMIT
+                $data['cbs_utilized_limit'] = $this->yblDataRow->cbs_utilised_amt;  // CBS_UTILISED_AMT
+                $data['diff_sanction_limit'] = $this->yblDataRow->cbs_sanction_limit; // CBS_SANCTION_LIMIT
+                $data['diff_drawing_power'] = null;
+                $data['cbs_available_balance'] = null;
+                $data['diff_available_balance'] = $data['available_balance'];
+                $data['diff_utilized_limit'] = ($this->yblDataRow->cbs_utilised_amt) - ($data['utilized_limit']);
+            }
+
+        if(isset($data) && count($data) > 0){
+            BankReconciliation::insert($data);
+        }
+	/*
+	if($this->total == $this->i){
+
+		DB::table('cron_log')
+        	->where('date', $this->datetime)
+        	->where('type', 'IF DF')
+        	->where('cron_name', 'yblReconciliation')
+        	->update(['status' => 1]);
+
+	}	
+	*/
+   	}
+}
