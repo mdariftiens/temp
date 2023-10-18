@@ -1,0 +1,404 @@
+
+
+    public function yblReconciliation()
+    {
+
+        $max = getMaxString();
+	$datetime= Carbon::now();
+        $cronArr = [
+            'date' => $datetime,
+            'product' => 'IF DF',
+            'cron' => 'yblReconciliation',
+            'display_name' => 'Reconciliation bank data'
+        ];
+
+    
+            $this->saveCronLog($cronArr);
+
+            BankReconciliation::truncate();
+
+            $od_accounts = OdAccount::select(
+                DB::raw("
+                $max(od_accounts.id) id,
+                od_accounts.account_number,
+                sum(od_accounts.available_limit) as available_limit,
+                sum(od_accounts.limit_utilies) as limit_utilies,
+                $max(od_accounts.od_expiry_date) as expiry_date,
+                $max(band_configurations.drawingpower) as drawing_power"
+                ))->join('band_configurations','band_configurations.ID','od_accounts.band_configurations_id')
+                ->groupBy('od_accounts.account_number')->get();
+
+            $loan_accounts =DB::table('band_configurations')
+                ->join('bands','bands.id','band_configurations.band_id')
+                ->leftjoin('funding_limits','band_configurations.id','funding_limits.band_configuration_id')
+                ->select('bands.id','funding_limits.available_limit',DB::raw('band_configurations.loan_account_number account_number'),'band_configurations.cust_id', 'band_configurations.drawingpower as drawing_power', 'funding_limits.seller_current_exposure as limit_utilies','funding_limits.expiry_date as expiry_date')
+
+                ->where('bands.type','invoice')
+                ->get();
+
+            $originalExternalYblDataCollection =  $this->getYblReconciliationBankData();
+            
+            $yblDataWithAccNo = [];
+            $yblDataWithCustId = [];
+		$total = -1;
+
+            foreach ($originalExternalYblDataCollection as $value){
+                $yblDataWithAccNo[$value->cbs_ac_no]= $value;
+                $yblDataWithCustId[$value->cbs_custid]= $value;	
+		//if(isset($yblDataWithAccNo[$od->account_number])) $total++;
+            }
+		$i = 0;
+		$isFound  = 0;
+            foreach ($od_accounts as $od) {
+                if(isset($yblDataWithAccNo[($od->account_number)])){
+		$isFound = 1;
+		//	dispatchSync((new  InsertYblReconciliationDataJob($od, $yblDataWithAccNo[($od->account_number)])));
+			$ybl = new  \App\Jobs\InsertYblReconciliationDataJob($od, $yblDataWithAccNo[$od->account_number],$total,$i,$datetime);
+
+                    dispatch($ybl)->onQueue('reconciliationjobs');
+			$i++;
+                }       }
+	if(!$isFound){echo "No Od account found in YBL data set"; die();
+	}
+            /*foreach ($loan_accounts as $loan_acc) {
+                if(isset($yblDataWithCustId[$loan_acc->cust_id])){
+                    //dispatch((new  InsertYblReconciliationDataJob($loan_acc, $yblDataWithCustId[$loan_acc->cust_id]))->onQueue('reconciliationjobs'));
+			$ybl = new  \App\Jobs\InsertYblReconciliationDataJob($loan_acc, $yblDataWithCustId[$loan_acc->cust_id]);
+
+                    dispatch($ybl)->onQueue('reconciliationjobs');
+
+                }
+            }
+*/
+            $this->markCronExecuted($cronArr);
+		echo "cron executed";
+	
+
+    }
+
+
+// =======================================
+
+
+
+<?php
+
+namespace App\Jobs;
+
+use App\Models\BankReconciliation;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Log,Mail,DB;
+use Carbon\Carbon;
+
+class InsertYblReconciliationDataJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $data;
+    public $yblDataRow;
+    /**
+     * Create a new job instance.
+     *
+     * @return void
+     */
+    public function __construct($accountDetail,$yblDataRow,$total,$i,$datetime)
+    {
+        
+        $this->data = $accountDetail;
+        $this->yblDataRow = $yblDataRow;
+	$this->total = $total;
+	$this->i = $i;
+	$this->datetime = $datetime;
+        
+    }
+
+    /**
+     * Execute the job.
+     *
+     * @return void
+     */
+    public function handle()
+   	{
+            $data = array();
+            $data['account_number'] = ($this->data->account_number);
+            $data['sanction_limit'] = $this->data->available_limit;
+            $data['drawing_power'] = $this->data->drawing_power;
+            
+            $data['utilized_limit'] = $this->data->limit_utilies;
+            $data['available_balance'] = $this->data->available_limit;
+            //$data['expiry_date'] = \DB::raw(setDateFormatFromDateString(Carbon::parse($this->data->expiry_date)->format('Y-m-d')));
+		$data['expiry_date'] = Carbon::parse($this->data->od_expiry_date)->format('Y-m-d');
+		$data['created_at'] = now();
+		$data['updated_at'] = now();
+
+            $data['type'] = (isset($this->data->account_number)) ? 'DF' : 'IF';
+            if (isset($this->yblDataRow)) {
+                $data['cbs_sanction_limit'] = $this->yblDataRow->cbs_sanction_limit; //CBS_SANCTION_LIMIT
+                $data['cbs_utilized_limit'] = $this->yblDataRow->cbs_utilised_amt;  // CBS_UTILISED_AMT
+                $data['diff_sanction_limit'] = $this->yblDataRow->cbs_sanction_limit; // CBS_SANCTION_LIMIT
+                $data['diff_drawing_power'] = null;
+                $data['cbs_available_balance'] = $this->yblDataRow->cbs_sanction_limit - $this->yblDataRow->cbs_utilised_amt ;
+                $data['diff_available_balance'] = $data['available_balance'];
+                $data['diff_utilized_limit'] = ($this->yblDataRow->cbs_utilised_amt) - ($data['utilized_limit']);
+            }
+
+        if(isset($data) && count($data) > 0){
+            BankReconciliation::insert($data);
+        }
+	/*
+	if($this->total == $this->i){
+
+		DB::table('cron_log')
+        	->where('date', $this->datetime)
+        	->where('type', 'IF DF')
+        	->where('cron_name', 'yblReconciliation')
+        	->update(['status' => 1]);
+
+	}	
+	*/
+   	}
+}
+
+
+// =======================================
+
+resources/views/bank/reconciliation/reconciliationBank.blade.php
+
+@extends('bank.layouts.default')
+@section('sidebar')
+	<ul>
+		<li><a href="" class="heading" style="text-transform: uppercase;">{{trans('label.lbl_discounting_request_new')}}</a></li>
+	</ul>
+@stop
+
+@section('content')
+
+<!-- Row Start -->
+  <div class="row">
+    <div class="col-lg-12 col-md-12">
+      <div class="widget">
+        <div class="widget-header">
+          <div class="title">
+            {{trans('navigation.nav_reconciliation')}}
+          </div> 
+        </div>
+        <div class="widget-body">
+          @if(session()->has('success'))
+            <div class="alert alert-success" role="alert">
+                {{session()->get('success')}}
+            </div>
+          @endif
+          @if(session()->has('failure'))
+            <div class="alert alert-warning" role="alert">
+                {{session()->get('failure')}}
+            </div>
+          @endif
+
+          <form class="form-horizontal ng-pristine ng-valid" role="form" name="search_poi">
+            <div class="form-group row">
+              <div class="col-xs-12 col-sm-6 col-md-3 col-lg-2">
+                <input type="text" name="account_number" class="form-control ng-pristine ng-untouched ng-valid" id="account" value="@if(Input::get('account_number')){{Input::get('account_number')}}@endif" placeholder="{{trans('label.lbl_account_no')}}">
+              </div>
+
+                <div class="col-xs-12 col-sm-6 col-md-3 col-lg-2 demo">
+                            <input type="text" name="report_date" id="config-demo" class="form-control date_filter" placeholder="{{trans('label.lbl_date')}}" value="{{ Input::get('report_date')}}">
+                          <i class="glyphicon glyphicon-calendar fa fa-calendar"></i>
+                </div>
+              <!--<div class="col-xs-12 col-sm-6 col-md-3 col-lg-2 select2-results__options">  
+                 <select name="sorting" class="form-control select-box-font wpmse_select2">
+                   <option value="">{{trans('label.lbl_sort_by')}}</option>
+                   <option value="available_limit-ASC" @if(Input::has('sorting') && (Input::get('sorting') === 'available_limit-ASC')) selected @endif> &#xf162; {{trans('label.lbl_available_limit')}}</option>
+                   <option value="available_limit-DESC" @if(Input::has('sorting') && (Input::get('sorting') === 'available_limit-DESC')) selected @endif> &#xf163; {{trans('label.lbl_available_limit')}}</option>
+                   <option value="limit_utilies-ASC" @if(Input::has('sorting') && (Input::get('sorting') === 'limit_utilies-ASC')) selected @endif> &#xf162; {{trans('label.lbl_limit_utilized_percentage')}}</option>
+                   <option value="limit_utilies-DESC" @if(Input::has('sorting') && (Input::get('sorting') === 'limit_utilies-DESC')) selected @endif> &#xf163; {{trans('label.lbl_limit_utilized_percentage')}}</option>
+                   <option value="cbs_available_limit-ASC" @if(Input::has('sorting') && (Input::get('sorting') === 'cbs_available_limit-ASC')) selected @endif> &#xf162; {{trans('label.lbl_cbs_available_limit')}}</option>
+                   <option value="cbs_available_limit-DESC" @if(Input::has('sorting') && (Input::get('sorting') === 'cbs_available_limit-DESC')) selected @endif> &#xf163; {{trans('label.lbl_cbs_available_limit')}}</option>
+                   <option data-icon="fa-sort-numeric-asc" value="cbs_limit_utilies-ASC" @if(Input::has('sorting') && (Input::get('sorting') === 'cbs_limit_utilies-ASC')) selected @endif>&#xf162; {{trans('label.lbl_cbs_limit_utilized_percentage')}}</option>
+                   <option data-icon="fa-sort-numeric-desc" value="cbs_limit_utilies-DESC" @if(Input::has('sorting') && (Input::get('sorting') === 'cbs_limit_utilies-DESC')) selected @endif>&#xf163; {{trans('label.lbl_cbs_limit_utilized_percentage')}}</option>
+                   <option data-icon="fa-sort-numeric-asc" value="type-ASC" @if(Input::has('sorting') && (Input::get('sorting') === 'type-ASC')) selected @endif>&#xf162; {{trans('label.lbl_type')}}</option>
+                   <option data-icon="fa-sort-numeric-desc" value="type-DESC" @if(Input::has('sorting') && (Input::get('sorting') === 'type-DESC')) selected @endif>&#xf163; {{trans('label.lbl_type')}}</option>
+
+                 </select>          
+              </div>-->
+              <div class="input-group-btn col-lg-3 col-md-3" style="width: auto;">
+                <button type="submit" class="btn btn-sm btn-info mr10" title="{{trans('label.lbl_search')}}"><span class="fa fa-search"></span></button> 
+                 <button type="button" class="btn btn-sm btn-info reset_in" onclick="window.location.href='/bank/reconciliation-bank';" style="margin:0 0 0 10px;"  title="{{trans('label.lbl_refresh')}}"><span class="fa fa-refresh"></span></button>
+                <input name="excelButton" type="submit" class="btn btn-info" ng-click="reset()" style="margin:0 0 0 10px;font-family: FontAwesome;" value="&#xf1c3;" title="{{trans('label.lbl_export_to_excel')}}">
+              </div>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            
+            @php($pageResult = $reconciliationData->toArray())
+            @if(isset($pageResult['total']))
+            <div class="box-header pagination_text" style="float:left">
+                @if($pageResult['total'] > 0)  
+                 {{trans('messages.pagination_msg',['from'=> $pageResult['from'] ,'to'=> $pageResult['to'],'total'=>$pageResult['total']])}} @endif    
+            </div>
+            <div class="box-header pagination_link" style="float:right">
+              @if($pageResult['total'] > 0) {!! str_replace('/?', '?',$reconciliationData->appends(Input::except('_url', '_method'))->render()) !!} @endif
+            </div>
+            @endif
+            
+            <table class="table table-condensed table-striped table-bordered table-hover no-margin">
+              <thead> 
+                <tr>
+                  <th class="text-left">
+                    {{trans('label.lbl_od_account_number')}}
+                  </th>
+
+                   <th class="text-left">
+                    {{trans('label.lbl_od_expiry_date')}}
+                  </th>
+
+{{--                   <th class="text-left">--}}
+{{--                    {{trans('label.lbl_flag')}}--}}
+{{--                  </th>--}}
+{{--                  <th class="text-left">--}}
+{{--                    {{trans('label.lbl_sanction_limit')}}--}}
+{{--                  </th>--}}
+{{--                  <th class="text-left">--}}
+{{--                    {{trans('label.lbl_drawing_power')}}--}}
+{{--                  </th>--}}
+                  <th class="text-left">
+                    {{trans('label.lbl_available_balance')}}
+                  </th>
+                  <th class="text-left">
+                    {{trans('label.lbl_limit_utilized')}}
+                  </th>
+{{--                  <th class="text-left">--}}
+{{--                    {{trans('label.lbl_cbs_sanction_limit')}}--}}
+{{--                  </th>--}}
+{{--                  <th class="text-left">--}}
+{{--                    {{trans('label.lbl_cbs_drawing_power')}}--}}
+{{--                  </th>--}}
+                  <th class="text-left">
+                    {{trans('label.lbl_cbs_available_balance')}}
+                  </th>
+                  <th class="text-left">
+                    {{trans('label.lbl_cbs_limit_utilized_percentage')}}
+                  </th>
+{{--                  <th class="text-left">--}}
+{{--                    {{trans('label.lbl_diff_sanction_limit')}}--}}
+{{--                  </th>--}}
+{{--                  <th class="text-left">--}}
+{{--                    {{trans('label.lbl_diff_drawing_power')}}--}}
+{{--                  </th>--}}
+                  <th class="text-left">
+                    {{trans('label.lbl_diff_available_balance')}}
+                  </th>
+                  <th class="text-left">
+                    {{trans('label.lbl_diff_limit_utilized')}}
+                  </th>
+                  <th class="text-left">
+                    {{trans('label.lbl_type')}}
+                  </th>
+                  <th class="text-left">
+                    {{trans('label.lbl_created_at')}}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @if(isset($reconciliationData) && count($reconciliationData) > 0)
+                  @foreach($reconciliationData as $data)
+                    <tr>
+                      <td class="text-left">{{ isset($data->account_number) ? $data->account_number : '-' }}</td>
+                       <td class="text-left">{{ isset($data->expiry_date) ? date("Y-m-d", strtotime($data->expiry_date)) : '-' }}</td>
+{{--                       <td class="text-left">{{ isset($data->count) ? $data->count : 0 }}</td>--}}
+{{--                      <td class="text-left">{{ isset($data->sanction_limit) ? $data->sanction_limit : '-' }}</td>--}}
+{{--                      <td class="text-left">{{ isset($data->drawing_power) ? $data->drawing_power : '-' }}</td>--}}
+                      <td>{{ isset($data->available_balance) ? $data->available_balance : '-' }}</td>
+                      <td>{{ isset($data->utilized_limit) ? $data->utilized_limit : '-' }}</td>
+{{--                      <td>{{ isset($data->cbs_sanction_limit) ? $data->cbs_sanction_limit : '-' }}</td>--}}
+{{--                      <td class="text-left">{{ isset($data->cbs_drawing_power) ? $data->cbs_drawing_power : '-' }}</td>--}}
+                      <td class="text-left">{{ isset($data->cbs_available_balance) ? $data->cbs_available_balance : '-' }}</td>
+                      <td class="text-left">{{ isset($data->cbs_utilized_limit) ? $data->cbs_utilized_limit : '-' }}</td>
+{{--                      <td class="text-left">{{ isset($data->diff_sanction_limit) ? $data->diff_sanction_limit : '-' }}</td>--}}
+{{--                      <td class="text-left">{{ isset($data->diff_drawing_power) ? $data->diff_drawing_power : '-' }}</td>--}}
+                      <td class="text-left">{{ isset($data->diff_available_balance) ? $data->diff_available_balance : '-' }}</td>
+                      <td class="text-left">{{ isset($data->diff_utilized_limit) ? $data->diff_utilized_limit : '-' }}</td>
+                      <td class="text-left">{{ isset($data->type) ? $data->type : '-' }}</td>
+                      <td class="text-left">{{ isset($data->created_at) ? $data->created_at : '-' }}</td>
+                      <!--<td class="text-left">{{ isset($data->updated_at) ? $data->updated_at : '-' }}</td>-->
+                    </tr>
+                  @endforeach  
+                @else
+                  <tr>
+                    <td colspan="8">
+                     <p class="noRecordsFound"> {{trans('label.lbl_no_record_found')}}</p>
+                    </td>
+                 </tr>
+               @endif
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+   </div>
+@stop
+
+
+// ============================================
+/app/LMS/smartfinuat.yesbank.in/app/Http/Controllers/Bank/BankAccountBalanceController.php
+public function bankReconciliationList()
+    {
+         if (Input::has('report_date')) {
+            //dd(Input::has('report_date'));
+            $this->ReconciliationRepo->report_date = filterDateFormat(Input::get('report_date'));
+        }
+
+        $reconciliationData = $this->ReconciliationRepo->getReconciliationBankData();
+        if(Input::has('excelButton')){
+            ob_end_clean();
+            ob_start();
+            $data =[];
+            $reportDate = Carbon::now()->format("d/M/Y");
+            $reportDate = str_replace('/', '_', $reportDate);
+            //return Excel::download(new ExcelExport('bank.odAccount.reconciliationExcel', $data),'reconciliation_'.$reportDate.'.csv');
+
+            $generatedFileName = 'bank_reconciliation_'.$reportDate.'.xlsx';
+
+            $header = [ 
+                "0" => trans('label.lbl_id'),
+                "1" => trans('label.lbl_od_account_number'),
+                "2" => trans('label.lbl_od_expiry_date'),
+//                "3" => trans('label.lbl_flag'),
+//                "4" => trans('label.lbl_sanction_limit'),
+//                "5" => trans('label.lbl_drawing_power'),
+                "3" => trans('label.lbl_available_balance'),
+                "4" => trans('label.lbl_limit_utilized'),
+//                "8" => trans('label.lbl_cbs_sanction_limit'),
+//                "9" => trans('label.lbl_cbs_drawing_power'),
+                "5" => trans('label.lbl_cbs_available_balance'),
+                "6" => trans('label.lbl_cbs_limit_utilized_percentage'),
+//                "12" => trans('label.lbl_diff_sanction_limit'),
+//                "13" => trans('label.lbl_diff_drawing_power'),
+                "7" => trans('label.lbl_diff_available_balance'),
+                "8" => trans('label.lbl_diff_limit_utilized'),
+                "9" => trans('label.lbl_type'),
+                "10" => trans('label.lbl_created_at')
+            ];
+            $data[] = $header; 
+            foreach($reconciliationData as $key => $value){
+                $value = (array) $value;
+                $value['expiry_date'] = date("Y-m-d", strtotime($value['expiry_date']));
+                unset($value['count'], $value['sanction_limit'], $value['drawing_power'], $value['cbs_sanction_limit'], $value['cbs_drawing_power'], $value['diff_sanction_limit'], $value['diff_drawing_power']);
+                $data[] =  $value;
+            }
+
+            ob_flush();
+            $response = Excel::download(new XLSXExport($data), $generatedFileName, \Maatwebsite\Excel\Excel::XLSX);
+            return $response;
+        }
+        return view('bank.reconciliation.reconciliationBank', compact('reconciliationData'));
+    }
+
+
