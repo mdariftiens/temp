@@ -1,0 +1,27 @@
+app/Repository/Eloquent/OdAccountRepo.php
+3344 
+ "date_(dd/mm/yyyy)" => "required|date|date_format:d-m-Y",
+                        "due_date_(dd/mm/yyyy)" => "required_unless:type,Repayment,Offline Debit|date|date_format:d-m-Y|after_or_equal:date_(dd/mm/yyyy)",
+
+3354
+$customMessages = [
+                        'required_unless' => 'The :attribute field is required for this transaction type.',
+                        'due_date_(dd/mm/yyyy).after_or_equal' => trans('messages.due_date_disbursement_err'),
+
+
+resources/lang/en/messages.php
+595
+'due_date_cuurent_err' => 'Due date must be greater than current date.',
+ 'due_date_disbursement_err' => 'Due date must be greater than disbursement date.',
+
+resources/lang/en_dbl/messages.php
+586
+
+'due_date_cuurent_err' => 'Due date must be greater than current date.',
+'due_date_disbursement_err' => 'Due date must be greater than disbursement date.',
+
+resources/lang/en_indusind/messages.php
+583
+'due_date_cuurent_err' => 'Due date must be greater than current date.',
+'due_date_disbursement_err' => 'Due date must be greater than disbursement date.',
+
