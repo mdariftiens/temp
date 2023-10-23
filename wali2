@@ -1,0 +1,35 @@
+Http/Controllers/Bank/BankDfDiscountingRequestController.php
+use App\Exports\ExceSoaExport;
+ public function index(Request $request)
+==============================
+ if (!empty(Input::get('invoiceDate'))){
+            $dates                   = filterDateFormat(Input::get('invoiceDate'));
+            $this->piRepo->startDate = saveDate($dates[0]);
+            $this->piRepo->endDate   = saveDate($dates[1]);
+            // Calculate the duration in days
+            $duration = strtotime($this->piRepo->startDate) - strtotime($this->piRepo->endDate);
+            $days_in_month = 30;
+            if ($duration > $days_in_month * 24 * 60 * 60) {
+                Session::flash('messageEr', trans('messages.date_range'));
+                Input::replace(['excelButton' => null]);
+            }
+        }
+-----------
+  if (Input::has('excelButton')) {
+            ob_end_clean();
+            ob_start();
+            $data =[];
+            $data['iReqData']=$resultData;
+            $data['statusData']=$statusData;
+            $data['symbol']=$symbol;
+            $data['defaultCurrency'] = $defaultCurrency;
+            $reportDate = Carbon::now()->format("d/M/Y");
+            $reportDate = str_replace('/', '_', $reportDate);
+            ob_flush();
+            return Excel::download(new ExceSoaExport('bank.discountingRequest.dfdiscountingRequestExcel', $data),'DF_Discounting_Requests_'.$reportDate.'.csv');
+        }
+
+
+
+
+
