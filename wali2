@@ -16,6 +16,17 @@ use App\Exports\ExceSoaExport;
         }
 -----------
   if (Input::has('excelButton')) {
+
+if (empty(Input::get('invoiceDate'))) {
+                Session::flash('messageEr', trans('messages.filter_date_validation'));
+                return back();
+            }
+
+
+
+
+
+
             ob_end_clean();
             ob_start();
             $data =[];
@@ -28,6 +39,7 @@ use App\Exports\ExceSoaExport;
             ob_flush();
             return Excel::download(new ExceSoaExport('bank.discountingRequest.dfdiscountingRequestExcel', $data),'DF_Discounting_Requests_'.$reportDate.'.csv');
         }
+
 
 
 
