@@ -1,0 +1,38 @@
+resources/views/buyer/includes/navigation.blade.php : 77
+
+{{--                    @if($v1['name']=='nav_initiate_drawdown' && (env('INITIATE_DRAWDOWN')=='no' || isClient(['indusind','choiceindia'])))--}}
+                    @if($v1['name']=='nav_initiate_drawdown' && \Entrust::can('distributor.invoice.drawdown') != true && (env('INITIATE_DRAWDOWN') =='no'))
+                         <?php $showDrw = 0;?>
+                    @endif
+                    @if($v1['name']=='nav_financing_request' && \Entrust::can('distributor.financerequest.checkValidationsDis') != true)
+
+
+
+resources/views/buyer/invoice/disinvoiceListing.blade.php : 141, 
+
+
+          @if(\Entrust::can('distributor.invoice.drawdown'))
+              @if(env('INITIATE_DRAWDOWN') == 'yes')
+                  <div class="{{ session('locale') == 'ar' ? 'pull-left' : 'pull-right'}}">
+                      <a href="{{URL::route('distributor.invoice.drawdown')}}">
+                          <button type="submit"
+                                  class="btn btn-info">{{trans('label.lbl_ini_drawdown')}}</button>
+                      </a>
+                  </div>
+              @endif
+          @endif
+
+
+143
+@if(\Entrust::can('distributor.iDiscounting.requestPayment'))
+              <div class="{{ session('locale') == 'ar' ? 'pull-left' : 'pull-right' }}" style="margin-right: 10px;">
+                <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#upload_pi">{{trans('label.lbl_upload_drawdowns')}}</button>
+              </div>
+              <div class="{{ session('locale') == 'ar' ? 'pull-lefresources/views/buyer/includes/navigation.blade.phpt' : 'pull-right' }}" style="margin-right: 10px;">
+                <a href="{{URL::route('distributor.iDiscounting.uplaodedDrawdowns')}}"><button type="submit" class="btn btn-info">{{trans('label.lbl_view_uploaded_drawdows')}}</button></a>
+              </div>
+          @endif
+        @endif
+
+
+        
