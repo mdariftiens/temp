@@ -1,0 +1,7 @@
+do {
+                $purge = DB::table('reversefeed_enpa')
+                    ->limit(1000)
+                    ->delete();
+            } while($purge);
+
+DB::table('reversefeed_enpa')->where(['UCIC_ID' => $reverseFeed->UCIC_ID])->limit(1)->delete();
