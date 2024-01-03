@@ -1,3 +1,5 @@
+dispatch_sync(new \App\Jobs\yesbank\OracleConnectionYBL(7));
+
 New : app/Console/Commands/YBLOfflineRepaymentToday.php
 
 <?php
