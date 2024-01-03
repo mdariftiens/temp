@@ -1,5 +1,7 @@
 dispatch_sync(new \App\Jobs\yesbank\OracleConnectionYBL(7));
 
+Carbon\Carbon::createFromFormat('dmY',"02082002")->format('Y-m-d')
+
 New : app/Console/Commands/YBLOfflineRepaymentToday.php
 
 <?php
