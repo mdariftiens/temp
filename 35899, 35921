@@ -1,0 +1,51 @@
+OdAccountRepo.php:370 getDetails()
+                . dateDiffStrNCol($date, '(select min(od_transactions.overdue_date) from od_transactions where od_accounts.id = od_transactions.od_account_id AND (balance > 0 OR interest_balance > 0 OR penal_interest > 0))','',true) . "dpd,"
+
+
+
+public function getOdAccountData() {
+        $date = Input::get('date') ? Input::get('date') : date('Y-m-d');
+        **** $curdate = setDateFormatFromDateString(date('Y-m-d'));
+        $dateCurr = getDatabaseKeyword('curDate');
+        *** $dateCurr15 = setDateFormatFromDateString(date('Y-m-d', strtotime($dateCurr. ' +15 days')));
+        $dateIntervalOvrdue = getDatabaseKeyword('dateIntervalOvrdue');
+        $join = SellerSetting::join('companies', 'seller_settings.seller_id', '=', 'companies.id')
+
+                ->join('od_accounts', 'od_accounts.distributor_id', '=', 'seller_settings.buyer_id')
+                ->join('band_configurations', 'band_configurations.id', '=', 'od_accounts.band_configurations_id')
+                ->join('companies as anc', 'od_accounts.anchor_id', '=', 'anc.id')
+                ->leftJoin('companies as companydis', 'od_accounts.distributor_id', '=', 'companydis.id')
+                ->leftJoin('branches','companydis.branch_id','=','branches.id')
+                ->join('banks', 'banks.id', '=', 'od_accounts.bank_id')
+                ->join('currency as curr', 'od_accounts.currency', '=', 'curr.code')
+                ->leftJoin(DB::raw('(select min(overdue_date) as overdue_date,od_account_id from od_transactions where (balance > 0 or interest_balance > 0 or penal_interest > 0) group by od_account_id) odt'), function($join) {
+                    $join->on('odt.od_account_id', '=', 'od_accounts.id');
+                })
+                ->leftJoin("group_masters as gm", function ($join) {
+                    $join->on("gm.id", "=", "band_configurations.fungible_group_id")->where("gm.is_fungible", '=', true);
+                })
+                ->where('seller_settings.buyer_id', $this->buyerId)
+                ->whereIn('od_accounts.approval_status',[1,2])
+                ->groupBy('od_accounts.account_number')
+                ->select(DB::raw('MAX(od_accounts.id) as id, max(od_accounts.settlement_mode) as repayment_mode, MAX(companies.name) as name,MAX(seller_settings.tax_percentage) as tax_percentage,MAX(seller_settings.payment_terms) as payment_terms,MAX(seller_settings.payment_due_date) as payment_due_date'), DB::raw('MAX(od_accounts.id) as OdID,MAX(od_accounts.uuid) as uuid,od_accounts.account_number,MAX(od_accounts.bank_id) as bank_id,MAX(od_accounts.distributor_id) as distributor_id,MAX(od_accounts.anchor_id) as anchor_id,MAX(od_accounts.created_at) as created_at,MAX(od_accounts.updated_at) as updated_at,MAX(od_accounts.od_limit) as od_limit,MAX(od_accounts.limit_utilies) as limit_utilies,MAX(od_accounts.pipeline_request) as pipeline_request,'.generateODAvailableLimitQueryString('od_accounts','band_configurations', 'gm', 'available_limit', 'MAX').',MAX( band_configurations.drawingpower) as drawingpower,MAX(od_accounts.currency) as currency,MAX(od_accounts.created_by) as created_by,MAX(od_accounts.updated_by) as updated_by,MAX(od_accounts.branch_name) as branch_name,MAX(od_accounts.branch_code) as branch_code,MAX(od_accounts.approval_status) as approval_status,MAX(od_accounts.approval_type) as approval_type,MAX(od_accounts.proposed_fields) as proposed_fields,MAX(od_accounts.approval_by) as approval_by,MAX(od_accounts.approval_at) as approval_at,MAX(od_accounts.approved_by) as approved_by,MAX(od_accounts.approved_at) as approved_at,MAX(od_accounts.rejection_reason) as rejection_reason,MAX(od_accounts.limit_approved_on) as limit_approved_on,MAX(od_accounts.band_configurations_id) as band_configurations_id,MAX(od_accounts.grace_period) as grace_period,MAX(od_accounts.penal_interest_on_interest) as penal_interest_on_interest,MAX(od_accounts.penal_rate) as penal_inter_on_inter_pre,MAX(od_accounts.max_penal_days) as overdue_days,MAX(od_accounts.od_expiry_date) as od_expiry_date,MAX( band_configurations.collection_acc) as collection_acc,
+                    MAX(od_accounts.overdue_interest_rate) as interest_on_interest,MAX('.lob_to_string('od_accounts.processing_fee').') as processing_fee'), DB::raw('MAX(banks.name) as bank_name,MAX(anc.name) as anc_name,MAX(curr.symbol) as symbol'),
+                    DB::raw("MAX((select (".ifNull('sum(od_transactions.balance)',0)." + ".ifNull('sum(od_transactions.interest_balance)',0)." + ".ifNull('sum(od_transactions.penal_interest)',0).")  from od_transactions where od_accounts.id = od_transactions.od_account_id AND $dateCurr > od_transactions.overdue_date)) as overdue_amount"),
+                    *** DB::raw("MAX((select sum(od_transactions.balance) from od_transactions where od_transactions.credit_type_id = 3 AND od_accounts.id = od_transactions.od_account_id AND od_transactions.overdue_date <= ".$dateCurr15." AND od_transactions.overdue_date > $dateCurr)) as pre_overdue_amount,MAX(companydis.name) as distributorcompanyname,MAX(branches.name) as branchname, MAX(".dateDiffStrNCol(date("Y-m-d", strtotime($date.' +1 day')),'odt.overdue_date','',true).")over_due_date , max(odt.overdue_date) as over_due_d"),
+                    *** DB::raw("(select count(*) from od_seasonal_limits where od_seasonal_limits.od_accounts_id=od_accounts.id and (".$curdate." >= od_seasonal_limits.start_date and ".$curdate." <= od_seasonal_limits.end_date)) as od_seasonal_limits_count"),
+                    DB::raw("(select sum(credit_balance) from od_transactions where od_accounts.id = od_transactions.od_account_id) as credit_balance"),
+                    DB::raw("(select MAX(DPD) from od_transactions where od_accounts.id = od_transactions.od_account_id) as max_dpd_days"));
+
+        $join->addSelect('gm.name as fungible_group_name',
+            'gm.sanction_limit as fungible_group_limit',
+            DB::raw(ifNull('band_configurations.cap_limit','0','fungible_cap_limit')),
+            DB::raw(ifNull('gm.available','0','group_available_limit')),
+            DB::raw("(CASE WHEN gm.name IS NULL THEN 0 ELSE 1 END) as is_fungible"));
+        $join->groupBy('od_accounts.account_number','gm.name','gm.sanction_limit','gm.available','od_accounts.id','band_configurations.cap_limit');
+        if ($this->buyerDashboardOD) {
+            $join = $join->take(10)->get();
+        } else {
+            $join = $join->paginate(15);
+        }
+//        dd($join);
+        return $join;
+    }
