@@ -7,7 +7,7 @@ public function getOdAccountData() {
         $date = Input::get('date') ? Input::get('date') : date('Y-m-d');
         **** $curdate = setDateFormatFromDateString(date('Y-m-d'));
         $dateCurr = getDatabaseKeyword('curDate');
-        *** $dateCurr15 = setDateFormatFromDateString(date('Y-m-d', strtotime($dateCurr. ' +15 days')));
+        *** $dateCurr15 = setDateFormatFromDateString(date('Y-m-d', strtotime(date('Y-m-d'). ' +15 days')));
         $dateIntervalOvrdue = getDatabaseKeyword('dateIntervalOvrdue');
         $join = SellerSetting::join('companies', 'seller_settings.seller_id', '=', 'companies.id')
 
